@@ -31,3 +31,9 @@ venv/
 
 # os
 .DS_Store
+
+# reference clone kept locally for diffing, not part of the deliverable
+reference_FastSpeech2/
+mfa_data/
+raw_data/
+lexicon/telugu_lexicon.txt
