@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 
 import torch
 import numpy as np
@@ -17,7 +18,8 @@ def get_model(args, configs, device, train=False):
             train_config["path"]["ckpt_path"],
             "{}.pth.tar".format(args.restore_step),
         )
-        ckpt = torch.load(ckpt_path)
+        # map_location so a CUDA-trained checkpoint still loads on MPS or CPU
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
         model.load_state_dict(ckpt["model"])
 
     if train:
@@ -55,14 +57,28 @@ def get_vocoder(config, device):
         vocoder.mel2wav.eval()
         vocoder.mel2wav.to(device)
     elif name == "HiFi-GAN":
-        with open("hifigan/config.json", "r") as f:
+        # The reference opened these relative to the current directory, which
+        # only worked when training was launched from the repository root. The
+        # per-language entry points do not run from there.
+        hifigan_dir = Path(__file__).resolve().parent.parent / "hifigan"
+        with open(hifigan_dir / "config.json", "r") as f:
             config = json.load(f)
         config = hifigan.AttrDict(config)
         vocoder = hifigan.Generator(config)
-        if speaker == "LJSpeech":
-            ckpt = torch.load("hifigan/generator_LJSpeech.pth.tar")
-        elif speaker == "universal":
-            ckpt = torch.load("hifigan/generator_universal.pth.tar")
+
+        ckpt_name = (
+            "generator_LJSpeech.pth.tar" if speaker == "LJSpeech"
+            else "generator_universal.pth.tar"
+        )
+        ckpt_path = hifigan_dir / ckpt_name
+        if not ckpt_path.exists():
+            raise FileNotFoundError(
+                f"{ckpt_path} missing. Unzip the bundled vocoder:\n"
+                f"  cd {hifigan_dir} && unzip -o '{ckpt_name}.zip'"
+            )
+        # torch >= 2.6 defaults weights_only=True, which cannot load these
+        # 2021-era pickled checkpoints.
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
         vocoder.load_state_dict(ckpt["generator"])
         vocoder.eval()
         vocoder.remove_weight_norm()

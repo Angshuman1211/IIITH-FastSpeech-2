@@ -103,3 +103,32 @@ MFA needs every transcript token to be in the dictionary. Two passes were needed
 
 MFA validation confirms this: 3032 sound files, 3032 transcripts, 1 speaker, no
 missing words, no feature-generation failures, no unreadable audio.
+
+## D11. Training moves to Kaggle, because MPS is too slow
+
+Measured on the M1 Pro: about 1.8 s/step in the first hundred steps and about
+3.15 s/step sustained once the periodic validation passes are included. At the
+configured 80000 steps that is roughly 70 h for one language and double that
+for both, against roughly 115 h of wall clock before the deadline. It does not
+fit alongside English preprocessing, alignment, inference and the report.
+
+Kaggle gives a free P100 or dual T4, a 12 h session cap and about 30 GPU hours
+a week. That should put 80000 steps at 5-8 h per language, so both fit inside
+one week's quota with each run inside a single session.
+
+Consequences for the code:
+  * `load_configs` takes `--set section.key=value` overrides so one config file
+    works both here and under /kaggle/input and /kaggle/working.
+  * The trainer already checkpoints every 10000 steps and `--restore_step`
+    resumes, so a dropped session costs at most 10000 steps.
+  * `scripts/package_for_kaggle.py` stages only the code, the preprocessed
+    features and the universal vocoder, which is 579 MB rather than the full
+    6 GB corpus.
+
+## D12. Inference and plotting were validated before any model finished training
+
+Running `inference.py --restore_step 0` against a randomly initialised model
+exercised the whole path: G2P, symbol lookup, model forward, vocoder, wav
+writing and all three plots. It produced 5 wavs and 15 plots with correct
+phoneme counts, which caught the path and API problems early instead of after
+a long GPU run. The audio is meaningless at that point, deliberately so.
