@@ -1,0 +1,93 @@
+# FastSpeech 2 configuration for Telugu (IndicTTS, male speaker).
+#
+# The reference implementation splits this across preprocess.yaml, model.yaml
+# and train.yaml. The assignment asks for one config.yaml per language, so the
+# three are merged here under three top-level keys and split again when loaded.
+
+preprocess:
+  dataset: "Telugu"
+
+  path:
+    corpus_path: "../../data/indictts_telugu"
+    lexicon_path: "../../lexicon/telugu_lexicon.txt"
+    raw_path: "../../raw_data/Telugu"
+    textgrid_path: "../../mfa_data/textgrids_telugu"
+    preprocessed_path: "../../preprocessed/Telugu"
+
+  preprocessing:
+    val_size: 574            # matches the 1.00 h validation split built by prepare_telugu.py
+    text:
+      text_cleaners: []      # Telugu text is normalised in scripts/telugu_g2p.py, not here
+      language: "te"
+    audio:
+      sampling_rate: 22050   # source is 16 kHz, resampled to match the HiFi-GAN vocoder
+      max_wav_value: 32768.0
+    stft:
+      filter_length: 1024
+      hop_length: 256
+      win_length: 1024
+    mel:
+      n_mel_channels: 80
+      mel_fmin: 0
+      mel_fmax: 8000         # HiFi-GAN expects 8000
+    pitch:
+      feature: "phoneme_level"
+      normalization: True
+    energy:
+      feature: "phoneme_level"
+      normalization: True
+
+model:
+  transformer:
+    encoder_layer: 4
+    encoder_head: 2
+    encoder_hidden: 256
+    decoder_layer: 6
+    decoder_head: 2
+    decoder_hidden: 256
+    conv_filter_size: 1024
+    conv_kernel_size: [9, 1]
+    encoder_dropout: 0.2
+    decoder_dropout: 0.2
+
+  variance_predictor:
+    filter_size: 256
+    kernel_size: 3
+    dropout: 0.5
+
+  variance_embedding:
+    pitch_quantization: "linear"
+    energy_quantization: "linear"
+    n_bins: 256
+
+  multi_speaker: False       # single speaker, see notes/decisions.md D2
+
+  max_seq_len: 1000
+
+  vocoder:
+    model: "HiFi-GAN"
+    speaker: "universal"     # no Telugu HiFi-GAN exists, so the universal one is used
+
+train:
+  path:
+    ckpt_path: "./checkpoints"
+    log_path: "../../logs/Telugu"
+    result_path: "../../output/result/Telugu"
+
+  optimizer:
+    batch_size: 16
+    betas: [0.9, 0.98]
+    eps: 0.000000001
+    weight_decay: 0.0
+    grad_clip_thresh: 1.0
+    grad_acc_step: 1
+    warm_up_step: 4000
+    anneal_steps: [30000, 50000, 70000]
+    anneal_rate: 0.3
+
+  step:
+    total_step: 80000        # the reference default of 900k is not reachable in the time available
+    log_step: 100
+    synth_step: 2000
+    val_step: 1000
+    save_step: 10000

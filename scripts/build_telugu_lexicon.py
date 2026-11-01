@@ -15,8 +15,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from telugu_g2p import g2p_word, phone_inventory  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "project" / "fastspeech2"))
+from text.telugu_g2p import g2p_word, phone_inventory  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 

@@ -18,8 +18,7 @@ output/
 *.log
 events.out.tfevents.*
 
-# checkpoints are delivered via LFS or an external link, see README
-*.pth.tar
+# checkpoints are delivered via Git LFS, see README
 *.ckpt
 
 # python
@@ -36,4 +35,3 @@ venv/
 reference_FastSpeech2/
 mfa_data/
 raw_data/
-lexicon/telugu_lexicon.txt

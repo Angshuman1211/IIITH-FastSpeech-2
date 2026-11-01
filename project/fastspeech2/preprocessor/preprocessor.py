@@ -74,20 +74,24 @@ class Preprocessor:
                 tg_path = os.path.join(
                     self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
                 )
+                # The scaler updates used to sit outside this check, so an
+                # utterance with no TextGrid would refit the scalers on the
+                # previous utterance's pitch and energy and add its frame count
+                # again. Everything that depends on an alignment now lives
+                # inside the branch.
                 if os.path.exists(tg_path):
                     ret = self.process_utterance(speaker, basename)
                     if ret is None:
                         continue
-                    else:
-                        info, pitch, energy, n = ret
+                    info, pitch, energy, n = ret
                     out.append(info)
 
-                if len(pitch) > 0:
-                    pitch_scaler.partial_fit(pitch.reshape((-1, 1)))
-                if len(energy) > 0:
-                    energy_scaler.partial_fit(energy.reshape((-1, 1)))
+                    if len(pitch) > 0:
+                        pitch_scaler.partial_fit(pitch.reshape((-1, 1)))
+                    if len(energy) > 0:
+                        energy_scaler.partial_fit(energy.reshape((-1, 1)))
 
-                n_frames += n
+                    n_frames += n
 
         print("Computing statistic quantities ...")
         # Perform normalization if necessary
@@ -139,15 +143,43 @@ class Preprocessor:
             )
         )
 
-        random.shuffle(out)
         out = [r for r in out if r is not None]
+
+        # The reference split here was `random.shuffle` then slice by count.
+        # Our split was already decided by duration when the corpus was built
+        # (see scripts/prepare_telugu.py), so honour that manifest when it
+        # exists and only fall back to the count-based split when it does not.
+        manifest_path = os.path.join(self.in_dir, "metadata.json")
+        train, val = [], []
+        if os.path.exists(manifest_path):
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            unknown = 0
+            for m in out:
+                basename = m.split("|")[0]
+                split = manifest.get(basename, {}).get("split")
+                if split == "val":
+                    val.append(m)
+                elif split == "train":
+                    train.append(m)
+                else:
+                    unknown += 1
+                    train.append(m)
+            print(
+                f"Split from manifest: {len(train)} train / {len(val)} val"
+                + (f" ({unknown} not in manifest, sent to train)" if unknown else "")
+            )
+        else:
+            random.shuffle(out)
+            train, val = out[self.val_size :], out[: self.val_size]
+            print(f"Split by val_size: {len(train)} train / {len(val)} val")
 
         # Write metadata
         with open(os.path.join(self.out_dir, "train.txt"), "w", encoding="utf-8") as f:
-            for m in out[self.val_size :]:
+            for m in train:
                 f.write(m + "\n")
         with open(os.path.join(self.out_dir, "val.txt"), "w", encoding="utf-8") as f:
-            for m in out[: self.val_size]:
+            for m in val:
                 f.write(m + "\n")
 
         return out

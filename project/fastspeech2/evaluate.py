@@ -83,7 +83,9 @@ def evaluate(model, step, configs, logger=None, vocoder=None):
             tag="Validation/step_{}_{}_synthesized".format(step, tag),
         )
 
-    return message
+    # loss_means is returned alongside the message so the trainer can write the
+    # validation loss curve to CSV. The reference returned only the message.
+    return message, loss_means
 
 
 if __name__ == "__main__":
@@ -116,5 +118,5 @@ if __name__ == "__main__":
     # Get model
     model = get_model(args, configs, device, train=False).to(device)
 
-    message = evaluate(model, args.restore_step, configs)
+    message, _ = evaluate(model, args.restore_step, configs)
     print(message)
