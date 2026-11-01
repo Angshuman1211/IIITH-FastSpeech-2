@@ -1,0 +1,33 @@
+# datasets and intermediates (never committed)
+data/
+preprocessed/
+corpus/
+*.wav
+!project/Results/**/*.wav
+*.parquet
+*.TextGrid
+*.npy
+
+# MFA
+mfa_data/
+*.zip
+
+# training artifacts
+logs/
+output/
+*.log
+events.out.tfevents.*
+
+# checkpoints are delivered via LFS or an external link, see README
+*.pth.tar
+*.ckpt
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# os
+.DS_Store
