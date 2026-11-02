@@ -49,9 +49,6 @@ DEMOGRAPHIC_KEYS = [
     "occupation_domain",
 ]
 
-_ABBREV = re.compile(r"[^a-z' ]+")
-
-
 def clean_text(t):
     """Delegates to the shared normaliser, so the transcripts the aligner sees
     and the text inference expands cannot drift apart. The expansion rules and
@@ -63,76 +60,6 @@ def clean_text(t):
     from text.english_norm import normalise_for_training
 
     return normalise_for_training(t)
-
-
-def _unused_old_clean_text(t):
-    """Lowercase, expand digits, drop everything the ARPAbet lexicon cannot use."""
-    global _INFLECT
-    if _INFLECT is None:
-        import inflect
-
-        _INFLECT = inflect.engine()
-    p = _INFLECT
-    t = t.lower().strip()
-
-    def digits(d):
-        return " " + " ".join(p.number_to_words(c) for c in d) + " "
-
-    # Ordinals first, before the generic rule can split them. "7th july" was
-    # becoming "seven th july", because expanding the digits leaves the suffix
-    # behind as its own token. 0.7% of the corpus carries a digit ordinal, and
-    # several of the utterances that failed to align were exactly this.
-    t = re.sub(r"(\d+)\s*(?:st|nd|rd|th)\b",
-               lambda m: " " + p.ordinal(p.number_to_words(m.group(1))) + " ", t)
-
-    # A 4-digit run next to one of these words is an identifier read digit by
-    # digit, which the length rule below is too short to catch. Same reasoning
-    # as the long runs, just keyed on the surrounding word instead of length.
-    t = re.sub(r"\b(m?pin|otp|code|cvv)\b([^0-9]{0,20}?)(\d{4})\b",
-               lambda m: m.group(1) + m.group(2) + digits(m.group(3)), t)
-
-    # Years are said in two halves. 1984 is "nineteen eighty four", not "one
-    # thousand nine hundred and eighty four", and the difference is not
-    # cosmetic: utterances carrying a year expanded the long way aligned with a
-    # median phone duration deviation of 3.61 against 2.29 for the rest, which
-    # is close to the 90th percentile of the whole corpus. 103 utterances.
-    def say_year(m):
-        n = int(m.group(1))
-        hi, lo = divmod(n, 100)
-        if lo == 0:
-            return f" {p.number_to_words(hi)} hundred "
-        if 2000 <= n <= 2009:
-            return f" two thousand and {p.number_to_words(lo)} "
-        if lo < 10:
-            return f" {p.number_to_words(hi)} oh {p.number_to_words(lo)} "
-        return f" {p.number_to_words(hi)} {p.number_to_words(lo)} "
-
-    # Range-gated, and not when a unit follows, so quantities stay quantities.
-    t = re.sub(r"\b(1[1-9]\d{2}|20[0-9]\d)\b"
-               r"(?!\s*(?:rupees|rs|dollars|crore|lakh|km|kg|people|students|"
-               r"users|seats|metres|meters|feet|units|mah|watts))",
-               say_year, t)
-
-    def say_number(m):
-        d = m.group(1)
-        # A long digit run is usually an identifier, not a quantity. Svarah is
-        # full of phone numbers, OTPs and pincodes, and a speaker reads those
-        # digit by digit. Expanding 79083174897 as a cardinal gives a
-        # transcript that does not match the audio at all, which either fails
-        # alignment or, worse, aligns badly and corrupts the durations. 3.1%
-        # of the corpus has a run of 5 or more digits.
-        #
-        # The exception is a round number, which is a real quantity however
-        # long it is, so 10000 stays "ten thousand" rather than becoming five
-        # separate digits.
-        if len(d) >= 5 and not d.endswith("000"):
-            return " " + " ".join(p.number_to_words(c) for c in d) + " "
-        return " " + p.number_to_words(d) + " "
-
-    t = re.sub(r"(\d+)", say_number, t)
-    t = t.replace("-", " ")
-    t = _ABBREV.sub(" ", t)
-    return re.sub(r"\s+", " ", t).strip()
 
 
 def speaker_from_path(path):

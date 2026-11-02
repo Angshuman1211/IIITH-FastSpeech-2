@@ -386,3 +386,56 @@ section 6 of the report compares them. Both are selected identically at 5 h and
 is a property of the corpora, since Svarah is ASR material with more head and
 tail silence than studio narration. Quoting only "5 hours" would be the
 misleading choice here, so the report carries both columns.
+
+## D23. English training and inference were expanding numbers differently
+
+Caught by dry-running English inference against an untrained model, the same
+trick as D12, before the GPU run finished.
+
+Every Svarah training transcript goes through `clean_text`, so the model only
+ever saw number words. The reference's `preprocess_english` hands raw text
+straight to the lexicon and `g2p_en`. Test sentence E4 is "10:45 AM on
+12 November 2026", so the two paths disagreed exactly where the assignment
+probes.
+
+What E4 produced before the fix, against after:
+
+| token | before | after |
+|---|---|---|
+| 10:45 | `T EH1 N T ER0 F AY1 T IH0 V` | `T EH1 N F AO1 R T IY0 F AY1 V` |
+| 2026 | `T W EH1 N T IY0 T W EH2 N T IY0 S K AY1 Z` | `T W EH1 N IY0 T W EH1 N IY0 S IH1 K S` |
+
+The first was not even words, and the second ends in "sixes" rather than "six".
+
+The rules now live once, in `project/fastspeech2/text/english_norm.py`, and
+both paths call them, which mirrors how Telugu already worked through
+`text/telugu_norm.py`. Two entry points, because training strips punctuation
+for the aligner while inference keeps it, since the reference turns punctuation
+into `sp` and the model saw `sp` wherever MFA measured a pause.
+`normalise_for_training` was checked to reproduce the old `clean_text` on every
+case, so the aligned corpus still matches the code that built it.
+
+One rule is new rather than moved. A time needed handling as a time, because
+expanding "10:45" as two numbers leaves the colon between them and inference
+would turn that into a pause in the middle of the time. Only 1 of 6656 source
+texts contains a time, and for that one, "11:28", the old path already gave the
+right words, so the training corpus is unaffected.
+
+## D24. A zero-length mel is a crash, so guard the collapsed case
+
+The English dry run died inside the decoder with "cannot reshape tensor of 0
+elements", which is what the variance adaptor produces when every phoneme is
+predicted zero frames. An untrained model does precisely that, since
+`exp(0) - 1` is 0.
+
+Per-phoneme zero is deliberate in the reference and worth keeping, because it
+is what lets a trained model drop a phoneme. The degenerate case is when the
+whole sequence collapses, and then the output is not merely wrong but
+impossible, and the error names a tensor dimension rather than the real
+problem.
+
+So the guard is scoped to the whole-sequence case: if a sequence's durations
+sum to zero across its real tokens, its first phoneme gets one frame. It cannot
+fire once durations are sensible, so it cannot change a trained model's output,
+and it makes the inference path testable before a model exists, which is the
+point.
