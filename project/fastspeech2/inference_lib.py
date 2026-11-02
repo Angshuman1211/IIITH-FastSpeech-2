@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from device_utils import device  # noqa: E402
 from text import text_to_sequence  # noqa: E402
+from text.english_norm import normalise_for_inference as english_normalise  # noqa: E402
 from text.telugu_g2p import g2p_word  # noqa: E402
 from text.telugu_norm import normalise as telugu_normalise  # noqa: E402
 from utils.model import get_model, get_vocoder  # noqa: E402
@@ -43,11 +44,16 @@ def read_lexicon(lex_path):
 
 
 def preprocess_english(text, preprocess_config):
-    """Unchanged in spirit from the reference, kept here so both languages share
-    one entry point."""
+    """English front end.
+
+    Numbers are expanded with the same code that built every training
+    transcript, which the reference does not do. Without it E4's "10:45 AM on
+    12 November 2026" reaches the lexicon as digits and comes out as nonsense,
+    because the model only ever saw number words.
+    """
     from g2p_en import G2p
 
-    text = text.rstrip(punctuation)
+    text = english_normalise(text).rstrip(punctuation)
     lexicon = read_lexicon(preprocess_config["path"]["lexicon_path"])
 
     g2p = G2p()

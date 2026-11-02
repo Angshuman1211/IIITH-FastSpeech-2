@@ -133,6 +133,21 @@ class VarianceAdaptor(nn.Module):
                 (torch.round(torch.exp(log_duration_prediction) - 1) * d_control),
                 min=0,
             )
+            # Every phoneme is allowed zero frames, which is what lets a trained
+            # model drop one. But if that happens to all of them the mel has
+            # length zero, and the decoder then reshapes an empty tensor and
+            # dies with an unhelpful error about an ambiguous dimension. An
+            # untrained model does exactly this, because exp(0) - 1 is 0.
+            #
+            # A zero-length mel is never a useful output, so give such a
+            # sequence a single frame and let it produce something. Scoped to
+            # the whole-sequence case on purpose, so it cannot fire once the
+            # durations are sensible and cannot change a trained model's output.
+            real = (~src_mask).float() if src_mask is not None else 1.0
+            collapsed = (duration_rounded * real).sum(dim=1) == 0
+            if collapsed.any():
+                duration_rounded = duration_rounded.clone()
+                duration_rounded[collapsed, 0] = 1
             x, mel_len = self.length_regulator(x, duration_rounded, max_len)
             mel_mask = get_mask_from_lengths(mel_len)
 

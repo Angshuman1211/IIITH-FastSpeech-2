@@ -19,7 +19,7 @@ preprocess:
     preprocessed_path: "../../preprocessed/English"
 
   preprocessing:
-    val_size: 512
+    val_size: 649
     text:
       text_cleaners: ["english_cleaners"]
       language: "en"

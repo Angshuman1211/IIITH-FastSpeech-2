@@ -1,0 +1,61 @@
+# FastSpeech 2 for English and Telugu.
+#
+# Versions are the ones this was actually built and trained with, on Python
+# 3.11. The reference implementation pins torch 1.7.0, numpy 1.19.0 and
+# librosa 0.7.2, none of which install on a current machine, so these are
+# deliberately current and the call sites were patched instead. See section 1.3
+# of the technical report.
+
+# --- model and training -------------------------------------------------------
+torch==2.15.0
+numpy==1.26.4
+tensorboard==2.21.0
+tqdm==4.70.1
+PyYAML==6.0.3
+
+# --- audio and features -------------------------------------------------------
+# librosa must be 0.10 or newer: pad_center became keyword-only, which is one of
+# the porting fixes.
+librosa==0.10.2.post1
+scipy==1.17.1
+soundfile==0.14.0
+numba==0.68.1
+
+# pyworld extracts F0. It imports pkg_resources, which setuptools 84 removed,
+# so setuptools has to stay below 81.
+pyworld==0.3.5
+setuptools==80.10.2
+
+# scikit-learn supplies the pitch and energy StandardScalers.
+scikit-learn==1.9.1
+
+# --- text front end -----------------------------------------------------------
+g2p-en==2.1.0
+nltk==3.10.4
+inflect==7.6.0
+Unidecode==1.4.0
+
+# tgt reads the TextGrids that Montreal Forced Aligner writes.
+tgt==1.5
+
+# --- plots --------------------------------------------------------------------
+matplotlib==3.11.2
+
+# --- data preparation only ----------------------------------------------------
+# Needed to fetch and unpack the two corpora, not to train or run inference.
+huggingface-hub==2.4.0
+pyarrow==16.1.0
+
+# --- two steps pip cannot do --------------------------------------------------
+#
+# 1. g2p_en fetches its part-of-speech tagger from NLTK at run time, not at
+#    install time, so it imports fine and only fails when called. English
+#    inference reaches it, because two of the test sentences contain words that
+#    miss the lexicon. Run once:
+#
+#      python -c "import nltk; nltk.download('averaged_perceptron_tagger_eng'); nltk.download('cmudict')"
+#
+# 2. Montreal Forced Aligner is a conda package and is only needed to
+#    regenerate alignments, not to train or run inference. Built with 3.4.3:
+#
+#      conda create -n mfa -c conda-forge montreal-forced-aligner=3.4.3

@@ -10,10 +10,14 @@ Changes from the reference:
     only wrote them to TensorBoard
   * a weights-only copy of each checkpoint is saved alongside the full one, so
     the repository can ship a checkpoint without the optimizer state
+  * FS2_MAX_HOURS stops the run cleanly and saves a checkpoint before a hosted
+    session's hard limit, which would otherwise kill the job and discard the
+    output
 """
 
 import csv
 import os
+import time
 
 import torch
 import torch.nn as nn
@@ -101,7 +105,28 @@ def train(args, configs):
     outer_bar.n = args.restore_step
     outer_bar.update()
 
+    # Hosted sessions are killed at a hard wall clock and the output is lost
+    # with them, so stop a little short of it and save on the way out.
+    max_hours = float(os.environ.get("FS2_MAX_HOURS", "0"))
+    started = time.time()
+
+    def save_ckpt(at_step):
+        ckpt_dir = train_config["path"]["ckpt_path"]
+        torch.save(
+            {
+                "model": bare_model.state_dict(),
+                "optimizer": optimizer._optimizer.state_dict(),
+            },
+            os.path.join(ckpt_dir, f"{at_step}.pth.tar"),
+        )
+        # weights only, for shipping in the repository
+        torch.save(
+            {"model": bare_model.state_dict()},
+            os.path.join(ckpt_dir, f"{at_step}_weights_only.pth.tar"),
+        )
+
     done = False
+    out_of_time = False
     while not done:
         inner_bar = tqdm(total=len(loader), desc=f"Epoch {epoch}", position=1)
         for batchs in loader:
@@ -161,21 +186,13 @@ def train(args, configs):
                     model.train()
 
                 if step % save_step == 0 or step == total_step:
-                    ckpt_dir = train_config["path"]["ckpt_path"]
-                    torch.save(
-                        {
-                            "model": bare_model.state_dict(),
-                            "optimizer": optimizer._optimizer.state_dict(),
-                        },
-                        os.path.join(ckpt_dir, f"{step}.pth.tar"),
-                    )
-                    # weights only, for shipping in the repository
-                    torch.save(
-                        {"model": bare_model.state_dict()},
-                        os.path.join(ckpt_dir, f"{step}_weights_only.pth.tar"),
-                    )
+                    save_ckpt(step)
 
-                if step >= total_step:
+                if max_hours and step % log_step == 0:
+                    if time.time() - started > max_hours * 3600:
+                        out_of_time = True
+
+                if step >= total_step or out_of_time:
                     done = True
                     break
                 step += 1
@@ -185,4 +202,10 @@ def train(args, configs):
             inner_bar.update(1)
         epoch += 1
 
-    print(f"Training finished at step {step}")
+    if out_of_time:
+        save_ckpt(step)
+        hrs = (time.time() - started) / 3600
+        print(f"Stopped at step {step} after {hrs:.2f} h, short of {total_step}, "
+              f"because FS2_MAX_HOURS={max_hours} was reached. Checkpoint saved.")
+    else:
+        print(f"Training finished at step {step}")

@@ -7,14 +7,13 @@ can upload it with the Kaggle API.
     python scripts/package_for_kaggle.py --language Telugu
     python scripts/package_for_kaggle.py --language Telugu --upload
 
---upload needs ~/.kaggle/kaggle.json, from kaggle.com/settings -> API ->
-Create New Token.
+--upload needs a Kaggle credential, which is either ~/.kaggle/kaggle.json or
+the newer ~/.kaggle/access_token, both from kaggle.com/settings -> API.
 """
 
 import argparse
 import json
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -71,11 +70,36 @@ def write_metadata(staging, slug, title):
     print(f"wrote dataset-metadata.json (id={slug})")
 
 
+def have_credentials():
+    """The classic client reads kaggle.json, newer ones read access_token."""
+    d = Path.home() / ".kaggle"
+    return (d / "kaggle.json").exists() or (d / "access_token").exists()
+
+
+def upload(staging, slug, new):
+    """Create or version the dataset through the Python API, so this does not
+    depend on the kaggle CLI being on PATH."""
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
+    api = KaggleApi()
+    api.authenticate()
+
+    # Subdirectories are uploaded as zips; Kaggle expands them on its side.
+    if new:
+        print(f"creating {slug} (private) ...")
+        api.dataset_create_new(str(staging), public=False, quiet=False, dir_mode="zip")
+    else:
+        print(f"pushing a new version of {slug} ...")
+        api.dataset_create_version(str(staging), "update", quiet=False, dir_mode="zip")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--language", required=True, choices=["English", "Telugu"])
     ap.add_argument("--user", help="your Kaggle username, required for --upload")
     ap.add_argument("--upload", action="store_true")
+    ap.add_argument("--version", action="store_true",
+                    help="push a new version instead of creating the dataset")
     ap.add_argument("--staging", default=None)
     args = ap.parse_args()
 
@@ -88,18 +112,13 @@ def main():
 
     if not args.user:
         sys.exit("--upload needs --user <kaggle-username>")
-    if not (Path.home() / ".kaggle" / "kaggle.json").exists():
-        sys.exit("~/.kaggle/kaggle.json not found. Create a token at kaggle.com/settings -> API.")
+    if not have_credentials():
+        sys.exit("no Kaggle credential in ~/.kaggle (kaggle.json or access_token). "
+                 "Create one at kaggle.com/settings -> API.")
 
     slug = f"{args.user}/fs2-{args.language.lower()}"
     write_metadata(staging, slug, f"FastSpeech2 {args.language} preprocessed")
-
-    cmd = ["kaggle", "datasets", "create", "-p", str(staging), "--dir-mode", "zip"]
-    print("running:", " ".join(cmd))
-    r = subprocess.run(cmd)
-    if r.returncode != 0:
-        print("\ncreate failed. If the dataset already exists, push a new version with:")
-        print(f"  kaggle datasets version -p {staging} -m 'update' --dir-mode zip")
+    upload(staging, slug, new=not args.version)
 
 
 if __name__ == "__main__":

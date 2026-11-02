@@ -23,7 +23,6 @@ import json
 import random
 import re
 import sys
-import wave
 from pathlib import Path
 
 import numpy as np
@@ -54,23 +53,103 @@ _ABBREV = re.compile(r"[^a-z' ]+")
 
 
 def clean_text(t):
-    """Lowercase, expand digits, drop everything the ARPAbet lexicon cannot use."""
-    import inflect
+    """Delegates to the shared normaliser, so the transcripts the aligner sees
+    and the text inference expands cannot drift apart. The expansion rules and
+    the reasoning behind each of them live in
+    project/fastspeech2/text/english_norm.py."""
+    import sys
 
-    p = inflect.engine()
+    sys.path.insert(0, str(ROOT / "project" / "fastspeech2"))
+    from text.english_norm import normalise_for_training
+
+    return normalise_for_training(t)
+
+
+def _unused_old_clean_text(t):
+    """Lowercase, expand digits, drop everything the ARPAbet lexicon cannot use."""
+    global _INFLECT
+    if _INFLECT is None:
+        import inflect
+
+        _INFLECT = inflect.engine()
+    p = _INFLECT
     t = t.lower().strip()
-    t = re.sub(r"(\d+)", lambda m: " " + p.number_to_words(m.group(1)) + " ", t)
+
+    def digits(d):
+        return " " + " ".join(p.number_to_words(c) for c in d) + " "
+
+    # Ordinals first, before the generic rule can split them. "7th july" was
+    # becoming "seven th july", because expanding the digits leaves the suffix
+    # behind as its own token. 0.7% of the corpus carries a digit ordinal, and
+    # several of the utterances that failed to align were exactly this.
+    t = re.sub(r"(\d+)\s*(?:st|nd|rd|th)\b",
+               lambda m: " " + p.ordinal(p.number_to_words(m.group(1))) + " ", t)
+
+    # A 4-digit run next to one of these words is an identifier read digit by
+    # digit, which the length rule below is too short to catch. Same reasoning
+    # as the long runs, just keyed on the surrounding word instead of length.
+    t = re.sub(r"\b(m?pin|otp|code|cvv)\b([^0-9]{0,20}?)(\d{4})\b",
+               lambda m: m.group(1) + m.group(2) + digits(m.group(3)), t)
+
+    # Years are said in two halves. 1984 is "nineteen eighty four", not "one
+    # thousand nine hundred and eighty four", and the difference is not
+    # cosmetic: utterances carrying a year expanded the long way aligned with a
+    # median phone duration deviation of 3.61 against 2.29 for the rest, which
+    # is close to the 90th percentile of the whole corpus. 103 utterances.
+    def say_year(m):
+        n = int(m.group(1))
+        hi, lo = divmod(n, 100)
+        if lo == 0:
+            return f" {p.number_to_words(hi)} hundred "
+        if 2000 <= n <= 2009:
+            return f" two thousand and {p.number_to_words(lo)} "
+        if lo < 10:
+            return f" {p.number_to_words(hi)} oh {p.number_to_words(lo)} "
+        return f" {p.number_to_words(hi)} {p.number_to_words(lo)} "
+
+    # Range-gated, and not when a unit follows, so quantities stay quantities.
+    t = re.sub(r"\b(1[1-9]\d{2}|20[0-9]\d)\b"
+               r"(?!\s*(?:rupees|rs|dollars|crore|lakh|km|kg|people|students|"
+               r"users|seats|metres|meters|feet|units|mah|watts))",
+               say_year, t)
+
+    def say_number(m):
+        d = m.group(1)
+        # A long digit run is usually an identifier, not a quantity. Svarah is
+        # full of phone numbers, OTPs and pincodes, and a speaker reads those
+        # digit by digit. Expanding 79083174897 as a cardinal gives a
+        # transcript that does not match the audio at all, which either fails
+        # alignment or, worse, aligns badly and corrupts the durations. 3.1%
+        # of the corpus has a run of 5 or more digits.
+        #
+        # The exception is a round number, which is a real quantity however
+        # long it is, so 10000 stays "ten thousand" rather than becoming five
+        # separate digits.
+        if len(d) >= 5 and not d.endswith("000"):
+            return " " + " ".join(p.number_to_words(c) for c in d) + " "
+        return " " + p.number_to_words(d) + " "
+
+    t = re.sub(r"(\d+)", say_number, t)
     t = t.replace("-", " ")
     t = _ABBREV.sub(" ", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
 def speaker_from_path(path):
-    """Svarah filenames look like <speaker>_<utt>.wav in the original manifest.
-    Take everything before the last underscore-number group as the speaker."""
+    """Group by the leading recording id.
+
+    Measured, not assumed. Svarah filenames look like
+    `281474976884635_f3269_chunk_0.wav`, and none of their fields is a speaker.
+    Across the 6656 utterances there are 2938 distinct leading ids and 3232
+    distinct `fNNNN` values, against 117 speakers documented in the paper, so
+    both are per-recording rather than per-speaker. The `f` prefix is not a
+    gender marker either, it appears on male and female rows alike.
+
+    This mode is kept only for comparison. Use the demographic mode, which is
+    the one grouping that lands near the documented speaker count.
+    """
     stem = Path(path).stem
-    m = re.match(r"^(.*?)[_-]\d+$", stem)
-    return m.group(1) if m else stem
+    return stem.split("_")[0]
 
 
 def load_rows(columns=None):
@@ -98,6 +177,24 @@ def audio_field(row):
         if k in row and isinstance(row[k], dict):
             return row[k]
     return None
+
+
+def probe(blob):
+    """Duration and sample rate without decoding the samples.
+
+    soundfile reads the real header rather than assuming one, which matters
+    because a HuggingFace audio column stores whatever the publisher uploaded.
+    A fixed 44-byte offset is wrong for any WAV carrying an extra chunk, and
+    the `wave` module rejects flac and mp3 outright.
+    """
+    info = sf.info(io.BytesIO(blob))
+    return info.frames / info.samplerate, info.samplerate
+
+
+def decode(blob):
+    """Mono float32 samples at the file's own rate."""
+    x, sr = sf.read(io.BytesIO(blob), dtype="float32", always_2d=True)
+    return x.mean(axis=1), sr
 
 
 def inspect():
@@ -139,21 +236,27 @@ def build(out_dir, speaker_mode):
             )
         return "svarah"
 
+    # Count every reason a row is dropped. Svarah has only 9.6 h against the
+    # 6 h needed, so silently skipping rows could quietly make the budget
+    # unreachable and look like a data shortage rather than a bug.
     eligible = []
+    skipped = collections.Counter()
     for r in rows:
         a = audio_field(r)
         if not a or not a.get("bytes"):
+            skipped["no audio bytes"] += 1
             continue
         try:
-            with wave.open(io.BytesIO(a["bytes"])) as w:
-                dur = w.getnframes() / w.getframerate()
-                sr = w.getframerate()
-        except Exception:
+            dur, sr = probe(a["bytes"])
+        except Exception as exc:
+            skipped[f"unreadable ({type(exc).__name__})"] += 1
             continue
         if not (MIN_SEC <= dur <= MAX_SEC):
+            skipped[f"outside {MIN_SEC}-{MAX_SEC}s"] += 1
             continue
         txt = clean_text(r.get("text") or "")
         if not txt:
+            skipped["empty text"] += 1
             continue
         eligible.append(
             {"bytes": a["bytes"], "sr": sr, "dur": dur, "text": txt,
@@ -162,6 +265,10 @@ def build(out_dir, speaker_mode):
 
     print(f"eligible: {len(eligible)} utts, {sum(e['dur'] for e in eligible)/3600:.2f} h")
     print(f"speakers: {len(set(e['speaker'] for e in eligible))}")
+    if skipped:
+        print("skipped:")
+        for reason, n in skipped.most_common():
+            print(f"  {n:>6}  {reason}")
 
     random.Random(SEED).shuffle(eligible)
 
@@ -178,10 +285,10 @@ def build(out_dir, speaker_mode):
         if used["val"] >= budget["val"] and used["train"] >= budget["train"]:
             break
 
-        x = np.frombuffer(e["bytes"], dtype=np.int16, offset=44).astype(np.float32) / 32768.0
-        if e["sr"] != DST_SR:
-            g = np.gcd(e["sr"], DST_SR)
-            x = resample_poly(x, DST_SR // g, e["sr"] // g)
+        x, sr = decode(e["bytes"])
+        if sr != DST_SR:
+            g = np.gcd(sr, DST_SR)
+            x = resample_poly(x, DST_SR // g, sr // g)
         import librosa
 
         x, _ = librosa.effects.trim(x, top_db=35)
@@ -220,7 +327,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--inspect", action="store_true", help="report speaker signal and exit")
     ap.add_argument("--out", default=str(ROOT / "raw_data" / "English"))
-    ap.add_argument("--speaker-mode", default="filename",
+    # demographic, because it is the only grouping that lands near the 117
+    # speakers the paper documents. See speaker_from_path for the measurement.
+    ap.add_argument("--speaker-mode", default="demographic",
                     choices=["filename", "demographic", "single"])
     args = ap.parse_args()
 
