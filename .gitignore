@@ -43,3 +43,6 @@ preprocessed/
 # Model checkpoints: 418 MB full, 140 MB weights-only, over GitHub's 100 MB
 # file limit. Distributed by link instead, see project/README.md.
 *.pth.tar
+
+# the assignment brief itself, not my work
+FastSpeech2_Assignment.pdf

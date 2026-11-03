@@ -4,8 +4,7 @@ Two separate FastSpeech 2 models, one per language, built from
 [ming024/FastSpeech2](https://github.com/ming024/FastSpeech2) and trained on
 5 hours of audio each with 1 hour held out.
 
-Submission for the IIIT Hyderabad SLFI Speech Processing Lab assignment, which
-is in [FastSpeech2_Assignment.pdf](FastSpeech2_Assignment.pdf).
+Submission for the IIIT Hyderabad SLFI Speech Processing Lab assignment.
 
 | | English | Telugu |
 |---|---|---|
