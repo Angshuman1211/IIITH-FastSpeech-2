@@ -172,7 +172,7 @@ Narrowing the ceiling to 300 Hz moves the estimate by 3 Hz, and harvest, which
 is far more resistant to octave error than dio, agrees to within 4 Hz. So the
 speaker really does sit near 190-200 Hz.
 
-Worth saying plainly in the report: that is in the usual adult female range and
+For the report: that is in the usual adult female range and
 well above the usual adult male range, so the corpus's own `gender` label looks
 questionable. The label mapping itself was verified and is not the problem,
 `gender=1` does correspond to the files named `telugumale` across all 8576 rows.
@@ -187,7 +187,7 @@ pushes a script kernel through the Kernels API and starts it. One push trains
 one language. Resuming attaches the kernel's own previous output, so
 `--restore-step` picks up from the last checkpoint.
 
-The guard matters more than it looks. A Kaggle GPU session is killed at 12 h
+The guard matters. A Kaggle GPU session is killed at 12 h
 and the output is discarded with it, so an overrunning job loses every
 checkpoint rather than just the last stretch. `FS2_MAX_HOURS` stops the loop at
 a clean step, saves, and exits, and is set to 11 h against the 12 h cap. This
@@ -277,9 +277,8 @@ seventy nine". Now a 4-digit run next to pin, mpin, otp, code or cvv is spelled
 out digit by digit. Same reasoning as D17, keyed on the neighbouring word
 rather than on length.
 
-**Years were read the long way.** This is the one worth the detail, because
-MFA's `alignment_analysis.csv` made it measurable rather than a matter of
-taste. Utterances containing a year expanded as "one thousand nine hundred and
+**Years were read the long way.** MFA writes an `alignment_analysis.csv`, which
+makes this measurable. Utterances containing a year expanded as "one thousand nine hundred and
 eighty four" aligned with a median phone duration deviation of **3.61** against
 **2.29** for everything else, where the whole corpus's 90th percentile is 3.72.
 So those utterances were aligning about as badly as the worst tenth of the
@@ -366,9 +365,7 @@ band, trim with librosa and budget on that, then lose more to the aligner.
 | English train | 5.000 h | 3.949 h | 21% |
 | English val | 1.000 h | 0.797 h | 20% |
 
-Not fixing this, and the reasoning matters more than the decision.
-
-It is not a bug. Removing leading and trailing silence is what the reference
+Not fixing this. It is not a bug. Removing leading and trailing silence is what the reference
 preprocessor does and what any FastSpeech 2 implementation does, because
 training a duration predictor on arbitrary head and tail silence is harmful.
 The selection is exactly the 5 h and 1 h the assignment asks for, and the
@@ -380,8 +377,8 @@ offers 7.97 h in the 1-15 s band, so train plus validation would need 7.6 h of
 it and leave almost no margin, on a corpus that is already the whole usable
 dataset.
 
-Matching the two languages matters more than hitting a round number, because
-section 6 of the report compares them. Both are selected identically at 5 h and
+Matching the two languages beats hitting a round number, since section 6 of the
+report compares them. Both are selected identically at 5 h and
 1 h, both lose silence to the same code, and the difference between 15% and 21%
 is a property of the corpora, since Svarah is ASR material with more head and
 tail silence than studio narration. Quoting only "5 hours" would be the
