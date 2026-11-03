@@ -1,18 +1,11 @@
 """Rule-based grapheme-to-phoneme for Telugu.
 
-MFA ships acoustic models for English and Tamil but not Telugu, so there is no
-pronunciation dictionary to download. Telugu orthography is close to phonemic,
-which makes a rule-based converter practical.
-
-How the script works:
-  * Telugu is an abugida. A bare consonant carries an inherent /a/.
-  * A vowel sign (matra) replaces that inherent vowel.
-  * The virama U+0C4D deletes it, producing a consonant cluster.
-  * Anusvara U+0C02 is a nasal that takes the place of articulation of the
-    consonant after it, so it is resolved by lookahead rather than mapped to a
-    fixed phone.
-
-The phone set is ASCII so it can be written straight into an MFA dictionary.
+MFA has no Telugu model and there is no dictionary to download, but Telugu
+orthography is close to phonemic so rules work. It is an abugida: a bare
+consonant carries an inherent /a/, a matra replaces it, the virama U+0C4D
+deletes it, and the anusvara U+0C02 takes the place of articulation of whatever
+follows, so it needs lookahead. Phones are ASCII to go straight into an MFA
+dictionary.
 """
 
 import re

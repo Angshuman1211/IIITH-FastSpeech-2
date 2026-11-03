@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-# keys whose values are filesystem paths and therefore need resolving
+# values that are paths, resolved against the config file
 _PATH_KEYS = {
     "corpus_path",
     "lexicon_path",
@@ -36,7 +36,7 @@ def _resolve(section, base):
 
 
 def _override(cfg, dotted, value):
-    """Set a nested key such as 'train.path.ckpt_path' to an absolute path."""
+    """Set a nested key such as train.path.ckpt_path."""
     section, *rest = dotted.split(".")
     if section not in cfg:
         raise KeyError(f"unknown config section {section!r} in override {dotted!r}")

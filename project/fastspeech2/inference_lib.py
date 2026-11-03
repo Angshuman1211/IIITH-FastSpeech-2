@@ -44,13 +44,7 @@ def read_lexicon(lex_path):
 
 
 def preprocess_english(text, preprocess_config):
-    """English front end.
-
-    Numbers are expanded with the same code that built every training
-    transcript, which the reference does not do. Without it E4's "10:45 AM on
-    12 November 2026" reaches the lexicon as digits and comes out as nonsense,
-    because the model only ever saw number words.
-    """
+    # numbers expanded with the same code that built the training transcripts
     from g2p_en import G2p
 
     text = english_normalise(text).rstrip(punctuation)
@@ -71,9 +65,7 @@ def preprocess_english(text, preprocess_config):
 
 
 def preprocess_telugu(text, preprocess_config):
-    """Telugu front end. Numbers are expanded first, then each word is looked up
-    in the generated lexicon, falling back to the rule-based G2P for anything
-    unseen (which is what happens to the broken word in T3)."""
+    # lexicon first, rule-based G2P for anything unseen, such as T3's broken word
     text = telugu_normalise(text)
     lexicon = read_lexicon(preprocess_config["path"]["lexicon_path"])
 
@@ -97,7 +89,7 @@ def phones_to_sequence(phones, preprocess_config):
 
 
 def phone_labels(phones):
-    """Strip the curly braces and return the phone list for plot tick labels."""
+    """Phone list for the plot tick labels."""
     return phones.strip("{}").replace("}{", " ").split()
 
 
@@ -128,7 +120,7 @@ def plot_variance(values, labels, title, ylabel, out_path, kind):
     ax.set_xlabel("phoneme", fontsize=9)
     ax.set_xlim(-0.5, n - 0.5)
 
-    # label every phoneme when there is room, otherwise thin them out
+    # thin the labels out when there are too many
     stride = 1 if n <= 60 else int(np.ceil(n / 60))
     ax.set_xticks(x[::stride])
     ax.set_xticklabels([labels[i] for i in range(0, n, stride)], rotation=90, fontsize=5)
@@ -179,8 +171,7 @@ def synthesise_one(model, vocoder, configs, phones, sentence_id):
 
 def run_inference(language, config_path, restore_step, sentences_path, results_root,
                   overrides=None):
-    """Synthesise every test sentence for one language and write the wavs and
-    the three variance-adaptor plots."""
+    """Synthesise every test sentence and write the wavs and plots."""
     from scipy.io import wavfile
 
     from config_utils import load_configs

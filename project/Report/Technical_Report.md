@@ -2,7 +2,7 @@
 
 Technical report for the SLFI Speech Processing Lab assignment.
 
-Author: Angshuman Dutta
+Author: Angshuman Chakravertty
 
 ---
 
@@ -192,8 +192,7 @@ kind of English the reference assumes.
 **Multi-speaker.** The config sets `multi_speaker: True`, since Svarah has 115
 speakers against Telugu's one.
 
-**The dictionary had to be extended.** This is the part I would have missed by
-going straight to alignment. Svarah is Indian English about government services
+**The dictionary had to be extended.** Svarah is Indian English about government services
 and digital payments, and against the 208651-entry `english_us_arpa` dictionary
 **4.53% of its tokens are out of vocabulary and 33.1% of utterances contain at
 least one**. The gaps are Indian place names, scheme acronyms such as EPFO,
@@ -223,8 +222,8 @@ guessing. Ordinals were being split, so "7th July" became "seven th july".
 Four-digit identifiers such as an MPIN were being read as quantities. And
 years were being read the long way.
 
-The year one is worth the detail, because MFA's `alignment_analysis.csv` makes
-it measurable instead of a matter of taste. Utterances carrying a year expanded
+The year one is measurable, because MFA writes an `alignment_analysis.csv`.
+Utterances carrying a year expanded
 as "one thousand nine hundred and eighty four" aligned with a median phone
 duration deviation of 3.61, against 2.29 for everything else, where the whole
 corpus's 90th percentile is 3.72. Those utterances were aligning about as badly
@@ -245,10 +244,8 @@ runs:
 the corpus 90th percentile to roughly its median, and the rest of the corpus
 did not move, which is the shape a targeted fix should have.
 
-Worth being careful about how this is read. Corpus-wide the median barely
-changes, 2.315 to 2.308, because 99 utterances out of 3899 cannot shift it. The
-per-group split is the honest number, and quoting only the corpus figure would
-hide the result rather than report it.
+Corpus-wide the median barely moves, 2.315 to 2.308, because 99 utterances out
+of 3899 cannot shift it. The per-group split is the number that means anything.
 
 **A trap worth recording.** `g2p_en` imports cleanly and only fails when
 called, because it fetches the NLTK `averaged_perceptron_tagger_eng` resource
@@ -260,7 +257,7 @@ inference reaches `g2p_en` and dies there. The download step is in
 > **Status note.** Both corpora are prepared and aligned. Sections 3 to 6 are
 > written once each model has trained, and say so until then.
 >
-> Worth noting for anyone reproducing this: Svarah is distributed only through
+> For anyone reproducing this: Svarah is distributed only through
 > a gated HuggingFace dataset, and there is no mirror. The AI4Bharat GitHub
 > repository, the AI4Bharat dataset API and the AIKosh government portal all
 > point back to the same gated entry, and anonymous access reads the file list
@@ -310,7 +307,7 @@ I verified the gender mapping rather than trusting it. Across all 8576 rows,
 5. Fill the 1 h validation budget first, then the 5 h training budget, using
    the duration **after** trimming.
 
-Step 5 is the part worth explaining. My first attempt budgeted on each file's
+Step 5 needs explaining. My first attempt budgeted on each file's
 raw duration and produced a corpus that MFA measured at 5.13 h rather than 6 h,
 because silence trimming removes about 14% of this corpus. Budgeting before
 trimming undershoots by roughly that much, and the delivered split would have
@@ -320,7 +317,7 @@ only then assigning the file to a budget fixes it exactly.
 I resampled up to 22.05 kHz to match the pretrained HiFi-GAN vocoder. This does
 not lose anything the model sees, because the mel front end uses
 `mel_fmax: 8000` and a 16 kHz recording already carries everything up to 8 kHz.
-The caveat worth stating is narrower than it first appears: the vocoder
+The real caveat is narrower: the vocoder
 reconstructs the 8 to 11 kHz band from a mel that never contained it. That
 applies to both languages equally.
 
@@ -383,7 +380,7 @@ the 6 h the assignment asks for, so there is far less room to subsample than on
 the Telugu side. And it has 117 speakers, so a single-speaker model is not
 possible and the English config is multi-speaker.
 
-It is also worth saying plainly that Svarah is an ASR evaluation benchmark, not
+Svarah is an ASR evaluation benchmark, not
 a TTS corpus. It contains spontaneous as well as read speech, recording
 conditions vary across speakers, and it was never built for synthesis. The
 assignment fixes the dataset, so I use it, but I expect this to show up in the
@@ -438,8 +435,7 @@ discard an entire speaker.
 
 ### 2.3 How much audio the models actually see
 
-Worth stating plainly, because "5 hours" is true of the selection and not of
-the mel frames.
+"5 hours" is true of the selection, not of the mel frames.
 
 Silence comes off three times. The length band picks utterances, librosa trims
 each one and the budgets are filled on that trimmed duration, and then the
@@ -503,121 +499,357 @@ for very little gain while adding a failure mode to a long unattended job.
 
 ## 3. Training and validation loss curves
 
-> **Outstanding.** Telugu training is in progress and English has not started.
-> This section will cover, for each language: the shape of the total loss curve
-> and each of the five components, where the curve flattens, the effect of the
-> learning-rate anneals at 30000, 50000 and 70000, whether validation loss
-> tracks training loss or diverges from it, and any instability. Figures are
-> `project/Results/<language>/training_loss.png` and `validation_loss.png`,
-> drawn from the per-step CSVs by `scripts/plot_losses.py`.
+Figures are `project/Results/<language>/training_loss.png` and
+`validation_loss.png`, drawn from the per-step CSVs the trainer writes.
 
-For reference, the local MPS run I used to validate the training path reached
-step 3200, with total loss falling from 11.00 at step 100 to 2.45, mel loss
-from 3.93 to 0.76 and duration loss from 0.49 to 0.08. That run exists only to
-prove the loop works and is not a result. Its CSVs are kept separately in
-`notes/local_mps_run/` so they cannot be confused with the real curves.
+### 3.1 Telugu
+
+The run reached **step 63675 of 80000** in 11 h 58 m on a Kaggle T4, at about
+1.5 steps per second, and was then stopped by Kaggle at its 12 h session limit.
+That is 384 epochs over 2669 utterances. Checkpoints are written every 10000
+steps, so the last complete one is at 60000 and nothing was lost. Section 3.3
+explains why the missing 16000 steps do not matter.
+
+**Training loss falls cleanly and never becomes unstable.** Total goes from
+10.30 at step 100 to 0.74, with no spikes, no divergence and no sign of a
+learning-rate problem at any of the anneal points.
+
+| component | step 100 | step 63600 |
+|---|---|---|
+| total | 10.30 | 0.74 |
+| mel | 3.83 | 0.37 |
+| mel postnet | 3.25 | 0.37 |
+| pitch | 1.33 | 0.021 |
+| energy | 1.45 | 0.019 |
+| duration | 0.44 | 0.010 |
+
+**Validation tells a completely different story, and it is the main result of
+this section.** Validation loss does not merely stop improving. It gets worse,
+and it starts getting worse almost immediately.
+
+| | best value | at step | value at 63000 |
+|---|---|---|---|
+| total | 3.834 | **2000** | 4.068 |
+| mel postnet | 0.9243 | **6000** | 0.9573 |
+| pitch | 1.075 | **1000** | 1.2814 |
+| energy | 0.673 | **1000** | 0.7971 |
+| duration | 0.082 | 1000 | 0.0749 |
+
+So the model's best validation score arrives within the first few thousand
+steps, and the remaining 60000 steps make it worse on every component except
+duration.
+
+### 3.2 What is overfitting, and what is not
+
+The components behave differently and lumping them together would hide that.
+
+**Pitch and energy overfit severely.** At the end, training pitch loss is 0.021
+and validation pitch loss is 1.281, a factor of **61**. Energy is 0.019 against
+0.797, a factor of **42**. Their validation curves rise steeply over the first
+8000 steps and then sit flat. The shape is diagnostic: an untrained predictor
+outputs something close to the dataset mean, and predicting the mean is a
+decent strategy under mean squared error. As the predictor learns the training
+set's actual pitch contours it stops predicting the mean, and because those
+contours do not generalise from 2669 utterances, validation error goes up. The
+predictors are memorising prosody.
+
+**Duration does not overfit.** Validation duration loss improves slightly, from
+0.082 to 0.075, and ends at 0.010 on training. Duration is the most learnable
+of the three, which makes sense: how long a phoneme lasts is largely a property
+of the phoneme and its neighbours, and that generalises. Pitch is a property of
+the sentence, the speaker's intent and the discourse, and that does not.
+
+**The mel decoder is roughly neutral.** Validation mel postnet improves from
+0.987 to 0.924 over the first 6000 steps, then drifts back to 0.957. The total
+drift is 3.6%, which is small, so the acoustic model itself is neither learning
+much more nor falling apart after step 6000.
+
+This matters for how the rest of the report reads. The variance adaptor plots
+in section 5 are the output of predictors that fit their training data almost
+perfectly and generalise badly, so the pitch and energy contours there should
+be read as plausible-looking prosody rather than as correct prosody for unseen
+text.
+
+### 3.3 Why the missing 16000 steps do not change anything
+
+Two independent lines of evidence.
+
+First, the validation curve above is flat from roughly step 30000 onward. The
+total moves from 4.07 to 4.07 between step 30000 and step 63000.
+
+Second, and more directly, I synthesised all five test sentences from both the
+10000-step and the 60000-step checkpoints and compared them. The outputs are
+nearly identical:
+
+| | T1 | T2a | T2b | T3 | T4 |
+|---|---|---|---|---|---|
+| duration at 10000, s | 4.54 | 2.15 | 2.31 | 1.93 | 7.16 |
+| duration at 60000, s | 4.59 | 2.10 | 2.24 | 1.94 | 6.95 |
+| mean F0 at 10000, Hz | 191.8 | 192.1 | 178.5 | 194.3 | 169.3 |
+| mean F0 at 60000, Hz | 200.6 | 197.2 | 194.2 | 201.7 | 175.1 |
+
+Six times as much training moves the predicted duration of each sentence by
+1 to 3% and the mean F0 by at most 9%. Neither checkpoint produces degenerate
+audio, and neither clips.
+
+I report the 60000-step checkpoint as the model, since it is the most trained
+one available and its outputs are sound. I am not claiming the extra steps
+helped. This model converged within about 10000 steps and spent everything
+after that memorising the training set.
+
+The practical lesson, if this were to be run again, is that 80000 steps was the
+wrong target for 5 hours of single-speaker audio. Early stopping on validation
+loss, or a much smaller model, would have been the better choice. I set 80000
+by reducing the reference's 900000 to fit the time available, which was a
+scheduling decision rather than one informed by this corpus, and the curves show
+it.
+
+### 3.4 English
+
+English reached **step 73100 of 80000** in exactly 11.00 h on a T4, at about
+1.85 steps per second, and stopped itself because `FS2_MAX_HOURS` was reached.
+That is 361 epochs over 3262 utterances.
+
+The shape is the same as Telugu. Training falls cleanly to 0.778 total, and
+validation bottoms out early and then drifts the wrong way.
+
+| | best value | at step | value at 73000 |
+|---|---|---|---|
+| total | 3.436 | **2000** | 3.608 |
+| mel postnet | 0.9216 | **7000** | 0.9650 |
+| pitch | 0.551 | 25000 | 0.5594 |
+| energy | 0.772 | 1000 | 0.8893 |
+| duration | 0.2148 | 1000 | 0.2297 |
+
+Final training losses are mel 0.371, pitch 0.0157, energy 0.0141, duration
+0.0066, so the train-to-validation gap is **36x on pitch** and **63x on
+energy**. Same memorisation as Telugu.
+
+The difference that matters is duration. Telugu ends at a validation duration
+loss of 0.075, English at **0.2297**, three times worse, and unlike Telugu it
+does not improve at all over the run. This is the multi-speaker effect and it
+is exactly what I expected to see. Telugu is one speaker with one speaking
+rate, so how long a phoneme lasts is close to a deterministic function of the
+phoneme and its context. English is 115 speakers who talk at different speeds,
+and the model has no speaker embedding at inference to tell it whose rate to
+use, so the best it can do is predict an average that fits nobody.
+
+Pitch is the opposite way round in absolute terms, 0.559 for English against
+1.281 for Telugu, but that comparison is not meaningful. Each corpus is
+normalised by its own statistics, and a 115-speaker pitch distribution is far
+wider, so the same normalised error means something different in each.
 
 ---
 
 ## 4. Observations on the generated speech
 
-> **Outstanding.** Needs trained models. This section will go through each test
-> sentence and comment on pronunciation and overall quality.
+All ten wavs are in `project/Results/<language>/test_generated_audios/`.
 
-What I will be listening for, decided in advance so the analysis is not written
-to fit whatever comes out:
+**A limit on this section.** I can report what is measurable from the phone
+sequences, the predicted durations and the waveforms. I have not assessed
+naturalness or intelligibility by ear, and I am not going to write down
+impressions I did not form. Judgements like "sounds natural" or "the speaker
+sounds breathy" would need listening, and that is the one part of this analysis
+I cannot do from the numbers.
 
-- **E1**, "antidisestablishmentarianism". A single very long low-frequency word.
-  The interesting question is whether duration prediction holds together across
-  a phoneme sequence far longer than anything in training.
-- **E2a and E2b**, the "conduct" pair. Same spelling, noun in (a) and verb in
-  (b), and English moves the stress from the first syllable to the second.
-  I can already say what will happen here without the model, because the cause
-  is in the front end and I checked it directly.
+What the numbers say:
 
-  The LibriSpeech lexicon holds both pronunciations:
+| | phones | duration | ms/phone | mean F0 | wav RMS |
+|---|---|---|---|---|---|
+| T1 | 66 | 4.59 s | 69.5 | 200.6 Hz | 0.141 |
+| T2a | 31 | 2.10 s | 67.8 | 197.2 Hz | 0.168 |
+| T2b | 37 | 2.24 s | 60.6 | 194.2 Hz | 0.122 |
+| T3 | 31 | 1.94 s | 62.5 | 201.7 Hz | 0.154 |
+| T4 | 119 | 6.95 s | 58.4 | 175.1 Hz | 0.118 |
+| E1 | 85 | 5.84 s | 68.7 | 244.6 Hz | 0.088 |
+| E2a | 50 | 4.08 s | 81.5 | 239.2 Hz | 0.122 |
+| E2b | 56 | 3.70 s | 66.1 | 243.4 Hz | 0.088 |
+| E3 | 37 | 2.61 s | 70.6 | 239.5 Hz | 0.108 |
+| E4 | 78 | 5.62 s | 72.0 | 245.7 Hz | 0.088 |
 
-  ```
-  CONDUCT  K AA1 N D AH0 K T     noun, stress on the first syllable
-  CONDUCT  K AH0 N D AH1 K T     verb, stress on the second
-  ```
+Nothing is degenerate. Every sentence lands between 58 and 82 ms per phoneme,
+which is a normal speaking rate, no file clips, and both languages predict F0
+inside their own corpus range: Telugu near its 187 Hz speaker mean, English
+near the average of its 115 speakers.
 
-  `read_lexicon` builds its dictionary with `setdefault`, so the second line is
-  dropped and every "conduct" gets the noun form.
+### Pronunciation, sentence by sentence
 
-  `g2p_en` would get it right. It tags part of speech with NLTK and
-  disambiguates homographs, and on these two exact sentences it returns
-  `K AA1 N D AH0 K T` for the noun and `K AA0 N D AH1 K T` for the verb. But
-  `preprocess_english` tries the lexicon first and only falls through to
-  `g2p_en` on a miss, so for a word that is in the lexicon the
-  part-of-speech aware path is never reached.
+**E1, "antidisestablishmentarianism".** The front end misses it in the lexicon
+and falls through to `g2p_en`, which produces
+`AE2 N T AY0 D IH0 S AH0 S T AE2 B L IH0 SH M AH0 N T EH1 R IY0 AH0 N IH0 Z AH0 M`.
+That is correct, and the 85-phone sequence holds together at 68.7 ms per
+phoneme, so the duration predictor does not fall apart on a sequence far longer
+than anything in training.
 
-  So E2a and E2b will be phonetically identical, both carrying noun stress, and
-  E2b is simply wrong. That is worth stating precisely rather than as a vague
-  architectural limitation, because the information was available and the
-  lookup order discarded it. The fix is a front end that defers to `g2p_en`
-  whenever the lexicon offers more than one pronunciation.
-- **E3**, "The rhyth m". A deliberately broken word. The text has to be
-  preserved as given, so the front end will see "rhyth" and "m" as two tokens.
-- **E4**, a time and a date. Tests the English text normalisation path.
-- **T1**, a long technical compound. Same question as E1, in Telugu.
-- **T2a and T2b**, the పట్టు pair, meaning grip in (a) and silk in (b). Telugu
-  writes both identically and pronounces both identically, so unlike the
-  English pair there is no phonetic difference to miss. The useful comparison is
-  whether the surrounding context changes the prosody of the shared word.
-- **T3**, పులి అడ విలో, with the same kind of deliberate gap as E3, plus
-  నిశ్శబ్దంగా which exercises the gemination and anusvara rules.
-- **T4**, year, ordinal and time together. Tests the Telugu normalisation I
-  wrote.
+**E2a and E2b, the "conduct" pair.** Both come out as
+`K AA1 N D AH0 K T`, byte for byte identical, which is what section 1.6
+predicted. The reason is worth restating precisely: ARPAbet carries stress in
+the phone symbol, so the noun is `AA1 ... AH0` and the verb should be
+`AA0 ... AH1`. The distinction lives in the phoneme string, not in the
+acoustics the model predicts on top of it. Since the front end hands the model
+the noun string for both, **no amount of training could fix E2b**. It is a
+front-end bug, not a model limitation.
 
-Phoneme counts from the front end, which I can confirm now because the
-inference path was validated before training: T1 66, T2a 31, T2b 37, T3 31,
-T4 119.
+**E3, "The rhyth m".** The deliberate break is preserved as instructed, and the
+consequence is visible: "rhyth" becomes `R AY1 DH` and "m" becomes `EH1 M`, so
+the model is synthesising something like "rythe em" rather than "rhythm". That
+is the correct behaviour given the assignment says to preserve the text.
+
+**E4, the date and time.** `10:45` becomes `T EH1 N F AO1 R T IY0 F AY1 V`,
+`12` becomes `T W EH1 L V` and `2026` becomes
+`T W EH1 N IY0 T W EH1 N IY0 S IH1 K S`. All three are right, and all three
+were wrong before the fix in section 1.6.
+
+**T1, the long technical compound.** 66 phones at 69.5 ms each. The
+Telugu G2P handles it without falling back to anything.
+
+**T2a and T2b, the పట్టు pair.** Unlike English, both are genuinely the same
+word phonetically, so identical phones are correct here rather than a failure.
+Section 5 shows the prosody does differ.
+
+**T3, "పులి అడ విలో".** The deliberate gap is preserved. The phones come out as
+`p u l i a dd a v i l oo`, and concatenating the two broken halves gives
+`a dd a v i l oo`, which is the correct pronunciation of the intended word
+అడవిలో. So the segmental content survives the break and only the word boundary,
+and whatever prosody the model attaches to it, is affected. That is a milder
+failure than E3, where the English break changed the phones themselves.
+
+**T4, the date and time in Telugu.** 2026 becomes
+`r e nn dd u v ee l a i r a v ai aa r u`, 12వ becomes `p a n n e nn dd a v a`
+and 10:45 becomes `p a d i n a l a bh ai ai d u`. The Telugu normaliser handles
+all three, including the irregular ordinal.
 
 ---
 
 ## 5. Variance adaptor analysis
 
-> **Outstanding.** Needs trained models. For each test sentence there are three
-> plots, in
-> `project/Results/<language>/variance_adaptor_plots/{duration,pitch,energy}/`.
-> Duration is plotted in milliseconds, pitch denormalised back to Hz and energy
-> denormalised to its original scale, all against the phoneme axis so the
-> predictions can be read directly against the text.
+Three plots per sentence, in
+`project/Results/<language>/variance_adaptor_plots/{duration,pitch,energy}/`.
+Duration is in milliseconds, pitch denormalised back to Hz and energy to its
+original scale, all against the phoneme axis.
 
-The specific patterns I will check:
+### What the plots show
 
-- Vowels predicted longer than stops, and geminates in Telugu longer than their
-  single counterparts, which is the clearest test of whether the duration
-  predictor learned anything linguistic rather than an average.
-- Pitch declination across each sentence, and whether phrase-final phonemes
-  fall.
-- Whether the T2a and T2b plots differ on the shared word పట్టు, which is where
-  context sensitivity would show up.
-- Whether E2a and E2b differ at all on "conduct", which per section 4 I expect
-  they will not.
-- Energy tracking vowels and sonorants, and dropping on silence and stops.
+**Pitch declines across the sentence.** The clearest example is T2a, which
+starts near 195 Hz, peaks at 258 Hz on the first vowel, and falls to 155 Hz by
+the final phoneme. That is ordinary declination and the model has learned it.
+
+**Duration is quantised.** Predicted durations land on multiples of 11.61 ms,
+because duration is an integer frame count at a 256-sample hop and 22.05 kHz.
+Values of 23.2, 34.8, 46.4, 58.0, 69.7 and 92.9 ms are 2, 3, 4, 5, 6 and 8
+frames. This is a property of FastSpeech 2 rather than something learned, but
+it is visible in every duration plot and worth knowing when reading them.
+
+**Energy tracks vowels.** In the T2 word పట్టు the vowels `a` and `u` carry
+energies of 82.6 and 58.7 while the stop closure `tt` sits at 5.99.
+
+### The T2 pair, where context does change the prediction
+
+This is the interesting case, because the two sentences contain the identical
+word పట్టు with the identical phone string `p a tt tt u`, so any difference in
+the predictions comes from context alone.
+
+| phone | T2a duration | T2b duration | T2a F0 | T2b F0 | T2a energy | T2b energy |
+|---|---|---|---|---|---|---|
+| p | 92.9 ms | 104.5 ms | 214.0 Hz | 175.7 Hz | 20.21 | 14.49 |
+| a | 58.0 | 46.4 | 206.4 | 184.6 | 82.56 | 84.68 |
+| tt | 69.7 | 69.7 | 192.7 | 192.6 | 19.18 | 17.48 |
+| tt | 34.8 | 34.8 | 221.3 | 237.7 | 5.99 | 5.50 |
+| u | 58.0 | 46.4 | 200.5 | 264.9 | 58.69 | 72.44 |
+| **word** | **313.5 ms** | **301.9 ms** | **207.0 Hz** | **211.1 Hz** | | |
+
+The predictions differ, most sharply on the final `u`, 200.5 Hz against
+264.9 Hz. So the variance adaptor is context sensitive, which it should be:
+self-attention runs over the whole phoneme sequence, so the same word gets
+different prosody depending on what surrounds it.
+
+The honest reading is narrower than it first looks. పట్టు sits at phoneme 11 in
+T2a and phoneme 3 in T2b, so most of this difference is position in the
+sentence interacting with declination, not the model understanding that one
+means grip and the other means silk. It has no access to that distinction.
+
+### The E2 pair, where context changes very little that matters
+
+| phone | E2a duration | E2b duration | E2a F0 | E2b F0 |
+|---|---|---|---|---|
+| K | 69.7 ms | 104.5 ms | 257.5 Hz | 244.2 Hz |
+| AA1 | 46.4 | 46.4 | 249.3 | 252.4 |
+| N | 81.3 | 92.9 | 242.9 | 248.6 |
+| D | 46.4 | 46.4 | 235.2 | 242.4 |
+| AH0 | 92.9 | 81.3 | 235.5 | 258.1 |
+| K | 104.5 | 104.5 | 218.6 | 256.5 |
+| T | 69.7 | 23.2 | 238.2 | 270.4 |
+| **word** | **510.8 ms** | **499.2 ms** | **239.6 Hz** | **253.2 Hz** |
+
+The same context sensitivity appears, but it cannot rescue the sentence. The
+stressed vowel `AA1` gets 46.4 ms in both and within 3 Hz of the same pitch,
+and `AA1` is on the **first** syllable in both. English marks the noun-verb
+contrast by moving primary stress to the second syllable, and that move is
+encoded in the phone symbols the front end chose, not in the duration and pitch
+the variance adaptor predicts on top of them. The adaptor is doing its job. It
+was handed the wrong input.
+
+### Reading these plots with section 3 in mind
+
+Section 3 showed that the pitch and energy predictors fit their training data
+to within 0.02 and generalise 36 to 63 times worse. The contours above are
+plausible and internally consistent, and declination is clearly real, but they
+should be read as the output of predictors that have memorised a great deal of
+the training prosody. Duration is the component to trust most, especially for
+Telugu, where it is the only one that generalised.
 
 ---
 
 ## 6. Comparative observations between English and Telugu
 
-> **Outstanding.** Needs both models.
+### Where they differ
 
-The comparison I expect to be able to make, stated now so it is honest about
-what is a prediction and what is a result:
+**Duration generalises for Telugu and not for English.** Final validation
+duration loss is 0.075 for Telugu against 0.2297 for English, and the English
+figure never improves across the whole run. One speaker with one speaking rate
+is a learnable target. 115 speakers at different rates, with no speaker
+identity given at inference, is not.
 
-- Telugu should come out better despite being the language with no existing
-  tooling, because it is one speaker in consistent recording conditions.
-  English is 117 speakers in varying conditions from an ASR benchmark, which is
-  a much harder target for a 6 h single-model fit.
-- The Telugu grapheme-to-phoneme mapping is close to regular, so a rule-based
-  G2P covers it well. English spelling is not, which is why the reference leans
-  on a lexicon and a neural G2P.
-- The limitations I already know of: no part-of-speech input, so the "conduct"
-  pair cannot be distinguished; a vocoder reconstructing an 8 to 11 kHz band
-  that was never in the source; 80000 steps rather than 900000; and a Telugu
-  acoustic model trained on 6 h, which is little for forced alignment.
+**Both overfit pitch and energy, and neither recovers.** Telugu ends 61x and
+42x worse on validation than training, English 36x and 63x. Both reach their
+best validation score within about 2000 steps.
+
+**Telugu needed far more work and produced the better-behaved model.** Telugu
+had no G2P, no pronunciation dictionary and no acoustic model, so all three
+were built from scratch. English had all three, and still needed the dictionary
+extended for 4.53% of its tokens. Despite that, the Telugu model is the
+cleaner one, because the corpus is one speaker in consistent conditions and
+Svarah is an ASR benchmark recorded across 115 speakers and varying conditions.
+The dataset mattered more than the tooling.
+
+**Phonetically identical words behave differently in the two languages.** T2's
+పట్టు really is the same word phonetically in both sentences, so identical
+phones are correct and the differing prosody in section 5 is a genuine, if
+positional, context effect. E2's "conduct" is **not** the same word
+phonetically, and producing identical phones is a failure.
+
+### Limitations
+
+- **No part-of-speech input.** E2b is wrong and cannot be fixed by training.
+  The fix is a front end that defers to `g2p_en` when the lexicon offers more
+  than one pronunciation, which is a change I identified but did not make.
+- **No speaker control for English.** A 115-speaker model with no speaker
+  embedding at inference predicts an average voice and an average speaking
+  rate.
+- **80000 steps was the wrong target.** Both models converged inside 10000.
+  Neither reached 80000, and section 3.3 shows the shortfall changed nothing.
+- **The vocoder invents the 8 to 11 kHz band.** Both corpora are band-limited
+  below 8 kHz by `mel_fmax`, and the universal HiFi-GAN reconstructs above
+  that from a mel that never contained it.
+- **Perceptual quality is unassessed.** See the note at the top of section 4.
+
+### What I would do differently
+
+Early stopping on validation loss, which the curves make an obvious choice. A
+smaller model, since 35.2 M parameters against 5 hours of audio is the direct
+cause of the memorisation in section 3. A speaker embedding for English,
+conditioned at inference on a chosen speaker. And the `g2p_en` fallback for
+ambiguous lexicon entries, which is a few lines and would fix E2b outright.
 
 ---
 
@@ -707,7 +939,7 @@ inference needs.
 
 ### 7.5 Notes on running this again
 
-Two things that cost me time and are worth knowing:
+Two things that cost me time:
 
 The inference and plotting path can be validated before any model is trained,
 by running `inference.py --restore_step 0` against a randomly initialised
@@ -718,5 +950,5 @@ change before a long GPU run rather than after.
 
 The reference repository's dependency pins cannot be satisfied on a current
 machine, and trying to install them into an active environment can upgrade
-packages that other work depends on. It is worth creating a dedicated
-environment and calling its interpreter by absolute path.
+packages that other work depends on. Create a dedicated environment and call
+its interpreter by absolute path.

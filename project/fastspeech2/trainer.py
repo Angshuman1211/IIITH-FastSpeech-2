@@ -1,18 +1,8 @@
 """Training loop, adapted from ming024/FastSpeech2 train.py.
 
-Changes from the reference:
-  * device comes from device_utils, so MPS is used when present
-  * nn.DataParallel is only applied when there is genuinely more than one CUDA
-    device. The reference wrapped the model unconditionally, which is pointless
-    on a single device and breaks on MPS.
-  * every logged step is appended to losses_train.csv / losses_val.csv, because
-    the assignment wants training and validation loss curves and the reference
-    only wrote them to TensorBoard
-  * a weights-only copy of each checkpoint is saved alongside the full one, so
-    the repository can ship a checkpoint without the optimizer state
-  * FS2_MAX_HOURS stops the run cleanly and saves a checkpoint before a hosted
-    session's hard limit, which would otherwise kill the job and discard the
-    output
+Differences: device via device_utils, DataParallel only on multiple CUDA
+devices, per-step loss CSVs, weights-only checkpoint copies, and FS2_MAX_HOURS
+to stop before a hosted session is killed.
 """
 
 import csv
@@ -64,7 +54,7 @@ def train(args, configs):
     )
 
     model, optimizer = get_model(args, configs, device, train=True)
-    # Only worth it with several CUDA devices; on MPS this wrapper breaks.
+    # breaks on MPS, and pointless on one device
     if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
         bare_model = model.module
@@ -105,8 +95,7 @@ def train(args, configs):
     outer_bar.n = args.restore_step
     outer_bar.update()
 
-    # Hosted sessions are killed at a hard wall clock and the output is lost
-    # with them, so stop a little short of it and save on the way out.
+    # hosted sessions are killed at a hard limit and lose their output
     max_hours = float(os.environ.get("FS2_MAX_HOURS", "0"))
     started = time.time()
 
@@ -119,7 +108,6 @@ def train(args, configs):
             },
             os.path.join(ckpt_dir, f"{at_step}.pth.tar"),
         )
-        # weights only, for shipping in the repository
         torch.save(
             {"model": bare_model.state_dict()},
             os.path.join(ckpt_dir, f"{at_step}_weights_only.pth.tar"),

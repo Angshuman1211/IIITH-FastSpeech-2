@@ -1,20 +1,14 @@
 #!/usr/bin/env python
-"""Preprocess the English corpus into FastSpeech 2 training features.
+"""Build the English training features.
 
-Expects the corpus and the MFA alignments to exist already:
+Needs the corpus and the alignments first. Unlike Telugu there is no lexicon to
+build and no acoustic model to train, since MFA publishes both for English.
 
     python ../../scripts/prepare_svarah.py
-
-English needs no lexicon build and no acoustic-model training, because MFA
-publishes both for English. That is the whole difference from Telugu:
-
     mfa model download acoustic english_us_arpa
     mfa model download dictionary english_us_arpa
     mfa align ../../raw_data/English english_us_arpa english_us_arpa \
         ../../mfa_data/textgrids_english --clean -j 8
-
-Then:
-
     python preprocess.py
 """
 
@@ -31,7 +25,7 @@ from preprocessor.preprocessor import Preprocessor  # noqa: E402
 
 
 def link_textgrids(preprocess_config):
-    """The preprocessor looks for TextGrids under
+    """TextGrids live under
     <preprocessed_path>/TextGrid/<speaker>/. MFA writes them somewhere else, so
     point one at the other instead of copying thousands of small files."""
     src = Path(preprocess_config["path"]["textgrid_path"])

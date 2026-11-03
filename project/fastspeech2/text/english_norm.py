@@ -1,20 +1,7 @@
-"""English number and date expansion, shared by data preparation and inference.
+"""English number expansion, shared by prepare_svarah.py and inference.
 
-This exists because the two paths were inconsistent. Every Svarah training
-transcript was expanded before alignment, so the model only ever saw words,
-but the reference's `preprocess_english` hands raw text to the lexicon and
-`g2p_en`. Test sentence E4 contains "10:45 AM on 12 November 2026" and came
-out as nonsense, with "10:45" becoming T ER0 F AY1 T IH0 V and 2026 becoming
-S K AY1 Z.
-
-So both paths now call the same expansion, and the Telugu side already works
-this way through `text/telugu_norm.py`.
-
-Two entry points, because training and inference want different things from
-punctuation. Training strips it, since the `.lab` transcripts feed a forced
-aligner that has no symbol for a comma. Inference keeps it, because the
-reference turns punctuation into `sp` tokens and the model saw `sp` during
-training wherever MFA measured a pause.
+Training transcripts were expanded before alignment, so the model only ever
+saw words. Inference has to do the same or E4 comes out as nonsense.
 """
 
 import re
@@ -41,12 +28,9 @@ def _digits(d):
 
 
 def expand_numbers(text):
-    """Turn every digit run into words, leaving case and punctuation alone."""
     p = _engine()
 
-    # Ordinals first, before the generic rule can split them. "7th July"
-    # otherwise becomes "seven th july", because expanding the digits leaves
-    # the suffix behind as its own token.
+    # before the generic rule, or "7th" splits into "seven th"
     text = re.sub(
         r"(\d+)\s*(?:st|nd|rd|th)\b",
         lambda m: " " + p.ordinal(p.number_to_words(m.group(1))) + " ",
@@ -54,10 +38,7 @@ def expand_numbers(text):
         flags=re.I,
     )
 
-    # Times, so the colon never survives to become an sp token. Without this
-    # "10:45" expands as two separate numbers and leaves the colon between
-    # them, which the inference front end turns into a pause in the middle of
-    # the time. The training path strips punctuation and so never saw this.
+    # keep the colon from surviving into an sp token
     def say_time(m):
         h, mi = int(m.group(1)), int(m.group(2))
         if mi == 0:
@@ -68,8 +49,7 @@ def expand_numbers(text):
 
     text = re.sub(r"\b(\d{1,2}):(\d{2})\b", say_time, text)
 
-    # A 4-digit run next to one of these words is an identifier read digit by
-    # digit, not a quantity, and it is too short for the length rule below.
+    # pins and OTPs are read digit by digit, and are too short for the rule below
     text = re.sub(
         r"\b(m?pin|otp|code|cvv)\b([^0-9]{0,20}?)(\d{4})\b",
         lambda m: m.group(1) + m.group(2) + _digits(m.group(3)),
@@ -77,10 +57,7 @@ def expand_numbers(text):
         flags=re.I,
     )
 
-    # Years are said in two halves. 1984 is "nineteen eighty four", and on the
-    # training corpus the long reading cost a median phone duration deviation
-    # of 3.61 against 2.29 for everything else. Range-gated, and suppressed
-    # when a unit follows so quantities stay quantities.
+    # 1984 is "nineteen eighty four", but 1500 rupees is still fifteen hundred
     def say_year(m):
         n = int(m.group(1))
         hi, lo = divmod(n, 100)
@@ -99,8 +76,7 @@ def expand_numbers(text):
         flags=re.I,
     )
 
-    # Everything else. A long run is an identifier, so it is spelled out,
-    # unless it is round and therefore a real quantity however long.
+    # a long run is a phone number, unless it is round and so a real quantity
     def say_number(m):
         d = m.group(1)
         if len(d) >= 5 and not d.endswith("000"):
@@ -112,11 +88,11 @@ def expand_numbers(text):
 
 
 def normalise_for_training(text):
-    """Lowercase words only, for the .lab transcripts MFA aligns against."""
+    """Words only, for the .lab files MFA aligns against."""
     text = expand_numbers(text.lower().strip()).replace("-", " ")
     return re.sub(r"\s+", " ", _KEEP.sub(" ", text)).strip()
 
 
 def normalise_for_inference(text):
-    """Expand numbers but keep the punctuation the front end turns into sp."""
+    """Keeps punctuation, which the front end turns into sp."""
     return expand_numbers(text).replace("-", " ")
