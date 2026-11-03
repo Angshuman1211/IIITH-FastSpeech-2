@@ -1,12 +1,11 @@
 # FastSpeech 2 for English and Telugu
 
-Two separate FastSpeech 2 text-to-speech models, one per language, built from
+Two separate FastSpeech 2 models, one per language, built from
 [ming024/FastSpeech2](https://github.com/ming024/FastSpeech2) and trained on
-5 hours of audio each with 1 hour held out for validation.
+5 hours of audio each with 1 hour held out.
 
-Submission for the IIIT Hyderabad SLFI Speech Processing Lab assignment. The
-task, the test sentences and the required deliverables are in
-[FastSpeech2_Assignment.pdf](FastSpeech2_Assignment.pdf).
+Submission for the IIIT Hyderabad SLFI Speech Processing Lab assignment, which
+is in [FastSpeech2_Assignment.pdf](FastSpeech2_Assignment.pdf).
 
 | | English | Telugu |
 |---|---|---|
@@ -14,62 +13,48 @@ task, the test sentences and the required deliverables are in
 | speakers | 115 | 1 |
 | train | 3262 utterances | 2669 utterances |
 | validation | 648 utterances | 573 utterances |
-| alignment | pretrained MFA model, dictionary extended | acoustic model trained from scratch |
-| grapheme to phoneme | `g2p_en` and a lexicon | rule-based, written for this project |
+| alignment | pretrained MFA, dictionary extended | acoustic model trained from scratch |
+| G2P | `g2p_en` and a lexicon | rule-based, written for this |
 
-## Start here
+## Where things are
 
-- **[project/README.md](project/README.md)** is the full guide: setup, every
-  command, and how to run the pipeline end to end.
-- **[project/Report/Technical_Report.pdf](project/Report/)** is the write-up.
-  It covers the architecture, every modification made to the reference, the
-  data selection and preprocessing for both languages, the loss curves, and the
-  variance-adaptor analysis for each test sentence.
-- **[notes/decisions.md](notes/decisions.md)** is the working log. Every
-  non-obvious choice, with the measurement that justified it, numbered D1 to
-  D24. If you want to know why something is the way it is, it is in there.
-
-## What is in this repository
+- [project/README.md](project/README.md) has the setup and every command.
+- [project/Report/](project/Report/) has the technical report.
+- [notes/decisions.md](notes/decisions.md) is the working log, D1 to D24. If
+  you want to know why something is the way it is, it is in there.
 
 ```
-project/           the submission: per-language entry points, shared model code,
-                   results, report, README and requirements
-scripts/           data preparation, lexicon building, Kaggle orchestration
-lexicon/           generated pronunciation dictionaries
-notes/             the decisions log
-kaggle/            the training kernel that runs on Kaggle's GPU
+project/     the submission: entry points, model code, results, report
+scripts/     data prep, lexicon building, Kaggle orchestration
+lexicon/     generated pronunciation dictionaries
+notes/       decisions log
+kaggle/      the training kernel
 ```
 
-The corpora, the extracted features, the alignments and the checkpoints are not
-in the repository, because they are large and in one case not redistributable.
-`project/README.md` explains how to regenerate each of them, and where to
-download the checkpoints.
+Corpora, features, alignments and checkpoints are not in the repo. See
+`project/README.md` for how to regenerate them and where to get the
+checkpoints.
 
-## Two things worth knowing before you start
+## Two gotchas
 
-**Svarah is gated and has no mirror.** Accept the terms once at
+Svarah is gated and has no mirror. Accept the terms at
 <https://huggingface.co/datasets/ai4bharat/Svarah>, then `hf auth login`. The
-AI4Bharat GitHub repository, the AI4Bharat dataset API and the AIKosh portal
-all point back to that same entry, so this step cannot be skipped.
+GitHub repo, the AI4Bharat API and AIKosh all point back to that same entry.
 
-**The reference implementation does not install as pinned.** It was last
-updated in October 2023 and pins torch 1.7.0, numpy 1.19.0 and librosa 0.7.2,
-none of which build on a current machine. The call sites were patched instead,
-and `project/requirements.txt` carries current versions. Section 1.3 of the
-report lists each change.
+The reference does not install as pinned. It wants torch 1.7.0, numpy 1.19.0
+and librosa 0.7.2, none of which build now, so the call sites were patched and
+`project/requirements.txt` carries current versions instead.
 
-## A note on the reference implementation
+## Bugs found in the reference
 
-Three defects were found in the upstream code and fixed. They are worth knowing
-about if you work from the same starting point, because two of them degrade
-results silently rather than failing:
+Worth knowing if you start from the same code, since two of these fail
+silently rather than loudly:
 
 - the pitch and energy scalers were fitted outside the branch that produced the
-  values, so statistics from skipped utterances shifted the normalisation of
-  every training target
-- the train and validation split was built by an unseeded shuffle at
-  preprocessing time, so it could not be reproduced or audited
-- `nn.DataParallel` was applied whether or not more than one device existed,
-  which is pointless on one GPU and fails outright on Apple MPS
+  values, so skipped utterances shifted the normalisation of every target
+- the train/validation split came from an unseeded shuffle at preprocessing
+  time, so it could not be reproduced
+- `nn.DataParallel` was applied unconditionally, which is pointless on one GPU
+  and breaks on MPS
 
 Section 1.4 of the report has the detail.
