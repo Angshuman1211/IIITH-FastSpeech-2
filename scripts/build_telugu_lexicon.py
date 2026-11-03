@@ -1,12 +1,8 @@
-"""Build the MFA pronunciation dictionary for Telugu from the corpus transcripts.
+"""Generate the MFA pronunciation dictionary for Telugu.
 
-MFA needs every word in the transcripts to have an entry. There is no published
-Telugu dictionary, so this generates one with the rule-based G2P in
-scripts/telugu_g2p.py.
-
-It also reports any transcript token that is not pure Telugu script (digits,
-Latin characters), because MFA will fail on those and they have to be either
-normalised or dropped before alignment.
+No published Telugu dictionary exists, so every transcript word goes through
+the rule-based G2P. Also reports tokens that are not pure Telugu script, since
+MFA fails on those.
 """
 
 import argparse

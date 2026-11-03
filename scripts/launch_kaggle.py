@@ -35,8 +35,7 @@ def slug(language):
 
 
 def build(language, total_step, max_hours, restore_step, staging):
-    """Write the kernel folder: the script with its settings baked in, plus the
-    metadata Kaggle needs to run it on a GPU."""
+    """Kernel folder: the script with its settings baked in, plus metadata."""
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
@@ -72,8 +71,7 @@ def build(language, total_step, max_hours, restore_step, staging):
         "dataset_sources": [f"{USER}/fs2-{language.lower()}"],
         "competition_sources": [],
         "model_sources": [],
-        # attaching the kernel to itself gives the next run the previous
-        # run's checkpoints under /kaggle/input/<kernel-slug>/
+        # attaching the kernel to itself exposes the last run's checkpoints
         "kernel_sources": [kslug] if restore_step else [],
     }
     (staging / "kernel-metadata.json").write_text(json.dumps(meta, indent=1))
@@ -125,8 +123,7 @@ def main():
     if args.log or args.pull:
         dest = ROOT / "kaggle_pkg" / f"out_{args.language.lower()}"
         dest.mkdir(parents=True, exist_ok=True)
-        # The run log is one of the output files, so --log and --pull differ
-        # only in whether the big checkpoints come down too.
+        # --log skips the big checkpoints, --pull takes everything
         pattern = None if args.pull else "*.log"
         files, _ = a.kernels_output(kslug, str(dest), file_pattern=pattern,
                                     force=True, quiet=not args.pull)

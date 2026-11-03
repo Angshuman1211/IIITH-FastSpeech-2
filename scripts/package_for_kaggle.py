@@ -19,8 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Only the universal vocoder is used; the LJSpeech one and the zips are 100 MB
-# of dead weight in the upload.
+# only the universal vocoder is used; the rest is 100 MB of dead weight
 SKIP_NAMES = {
     "generator_LJSpeech.pth.tar",
     "generator_LJSpeech.pth.tar.zip",
@@ -53,7 +52,7 @@ def stage(language, staging):
     shutil.copytree(src, staging / "preprocessed" / language, ignore=ignore,
                     symlinks=False, ignore_dangling_symlinks=True)
 
-    # sanity: the vocoder has to be there or training dies at step 0
+    # without this training dies at step 0
     voc = staging / "project" / "fastspeech2" / "hifigan" / "generator_universal.pth.tar"
     if not voc.exists():
         sys.exit(f"vocoder missing at {voc}. Unzip it in project/fastspeech2/hifigan/ first.")
@@ -71,20 +70,19 @@ def write_metadata(staging, slug, title):
 
 
 def have_credentials():
-    """The classic client reads kaggle.json, newer ones read access_token."""
+    # old client writes kaggle.json, new one writes access_token
     d = Path.home() / ".kaggle"
     return (d / "kaggle.json").exists() or (d / "access_token").exists()
 
 
 def upload(staging, slug, new):
-    """Create or version the dataset through the Python API, so this does not
-    depend on the kaggle CLI being on PATH."""
+    """Python API, so this does not need the kaggle CLI on PATH."""
     from kaggle.api.kaggle_api_extended import KaggleApi
 
     api = KaggleApi()
     api.authenticate()
 
-    # Subdirectories are uploaded as zips; Kaggle expands them on its side.
+    # subdirs upload as zips and Kaggle expands them
     if new:
         print(f"creating {slug} (private) ...")
         api.dataset_create_new(str(staging), public=False, quiet=False, dir_mode="zip")

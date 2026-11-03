@@ -1,18 +1,9 @@
-"""Turn the Svarah parquet shards into a FastSpeech 2 raw_data folder.
+"""Build raw_data/English from the Svarah parquet shards.
 
-Svarah is an ASR evaluation benchmark, not a TTS corpus: 9.6 h of read and
-spontaneous Indian-accented English spread over roughly 117 speakers, published
-as a single `test` split. Its schema carries demographics (gender, age-group,
-native place) but **no speaker id column**, so speaker identity has to be
-recovered before anything multi-speaker can be trained.
-
-Run the inspection pass first, which downloads nothing extra and just reports
-what identity signal exists:
+Svarah has no speaker id column, so speakers are recovered from the
+demographic fields. Run --inspect first to see what is there.
 
     python scripts/prepare_svarah.py --inspect
-
-Then build the corpus:
-
     python scripts/prepare_svarah.py
 """
 
@@ -50,10 +41,7 @@ DEMOGRAPHIC_KEYS = [
 ]
 
 def clean_text(t):
-    """Delegates to the shared normaliser, so the transcripts the aligner sees
-    and the text inference expands cannot drift apart. The expansion rules and
-    the reasoning behind each of them live in
-    project/fastspeech2/text/english_norm.py."""
+    # shared with inference, so the two cannot drift apart
     import sys
 
     sys.path.insert(0, str(ROOT / "project" / "fastspeech2"))
@@ -63,18 +51,8 @@ def clean_text(t):
 
 
 def speaker_from_path(path):
-    """Group by the leading recording id.
-
-    Measured, not assumed. Svarah filenames look like
-    `281474976884635_f3269_chunk_0.wav`, and none of their fields is a speaker.
-    Across the 6656 utterances there are 2938 distinct leading ids and 3232
-    distinct `fNNNN` values, against 117 speakers documented in the paper, so
-    both are per-recording rather than per-speaker. The `f` prefix is not a
-    gender marker either, it appears on male and female rows alike.
-
-    This mode is kept only for comparison. Use the demographic mode, which is
-    the one grouping that lands near the documented speaker count.
-    """
+    """Leading recording id. Not a speaker: 2938 distinct values over 6656
+    utterances against 117 speakers. Kept for comparison only."""
     stem = Path(path).stem
     return stem.split("_")[0]
 
@@ -107,13 +85,8 @@ def audio_field(row):
 
 
 def probe(blob):
-    """Duration and sample rate without decoding the samples.
-
-    soundfile reads the real header rather than assuming one, which matters
-    because a HuggingFace audio column stores whatever the publisher uploaded.
-    A fixed 44-byte offset is wrong for any WAV carrying an extra chunk, and
-    the `wave` module rejects flac and mp3 outright.
-    """
+    """Duration and rate without decoding. soundfile reads the real header,
+    which a fixed 44-byte offset would get wrong."""
     info = sf.info(io.BytesIO(blob))
     return info.frames / info.samplerate, info.samplerate
 
@@ -163,9 +136,7 @@ def build(out_dir, speaker_mode):
             )
         return "svarah"
 
-    # Count every reason a row is dropped. Svarah has only 9.6 h against the
-    # 6 h needed, so silently skipping rows could quietly make the budget
-    # unreachable and look like a data shortage rather than a bug.
+    # count every drop reason: only 9.6 h available against 6 h needed
     eligible = []
     skipped = collections.Counter()
     for r in rows:
@@ -199,8 +170,7 @@ def build(out_dir, speaker_mode):
 
     random.Random(SEED).shuffle(eligible)
 
-    # Speaker-stratified: every speaker that appears must appear in both splits,
-    # otherwise a multi-speaker model has validation speakers it never trained on.
+    # stratified, so val has no speaker the model never trained on
     budget = {"val": VAL_HOURS * 3600, "train": TRAIN_HOURS * 3600}
     used = {"val": 0.0, "train": 0.0}
     counts = {"val": 0, "train": 0}
@@ -254,8 +224,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--inspect", action="store_true", help="report speaker signal and exit")
     ap.add_argument("--out", default=str(ROOT / "raw_data" / "English"))
-    # demographic, because it is the only grouping that lands near the 117
-    # speakers the paper documents. See speaker_from_path for the measurement.
+    # demographic: the only grouping near the 117 speakers in the paper
     ap.add_argument("--speaker-mode", default="demographic",
                     choices=["filename", "demographic", "single"])
     args = ap.parse_args()

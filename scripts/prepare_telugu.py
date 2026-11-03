@@ -1,21 +1,10 @@
-"""Turn the IndicTTS Telugu parquet shards into a FastSpeech 2 raw_data folder.
+"""Build raw_data/Telugu from the IndicTTS parquet shards.
 
-Data selection (justified in the report):
-  * Only the male speaker (gender=1). The female speaker averages 21.3 s per
-    utterance and yields only 2.31 h once filtered to a trainable length band,
-    which is not enough for the required 5 h + 1 h. The male speaker yields
-    6.86 h in the same band.
-  * Only utterances between MIN_SEC and MAX_SEC. Very long utterances hurt
-    forced alignment and blow up memory during training.
-  * Seeded shuffle, then fill the validation hour first and the training hours
-    after, so the two sets are disjoint by construction.
-
-Audio is resampled 16 kHz -> 22.05 kHz to match the pretrained HiFi-GAN vocoder.
-This adds no new information above 8 kHz and the report says so explicitly.
-
-Output layout (what MFA and ming024/FastSpeech2 expect):
-    raw_data/Telugu/telugumale/<basename>.wav
-    raw_data/Telugu/telugumale/<basename>.lab
+Male speaker only: the female one averages 21.3 s per utterance and yields just
+2.31 h inside a trainable length band, against 6.86 h for the male. Seeded
+shuffle, validation hour filled first, so the splits are disjoint by
+construction. Resampled 16 kHz to 22.05 kHz for the pretrained HiFi-GAN, which
+adds nothing above 8 kHz.
 """
 
 import argparse
