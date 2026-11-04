@@ -645,14 +645,32 @@ wider, so the same normalised error means something different in each.
 
 All ten wavs are in `project/Results/<language>/test_generated_audios/`.
 
-**A limit on this section.** I can report what is measurable from the phone
-sequences, the predicted durations and the waveforms. I have not assessed
-naturalness or intelligibility by ear, and I am not going to write down
-impressions I did not form. Judgements like "sounds natural" or "the speaker
-sounds breathy" would need listening, and that is the one part of this analysis
-I cannot do from the numbers.
+### 4.1 The headline, by ear
 
-What the numbers say:
+**Telugu is clearly better than English.** Every Telugu sentence comes out as
+well formed, separable words, all the way through. The short English sentences
+are followable, but both long ones start cleanly and then degrade: E1 after
+roughly its first syllables, E4 after "the meeting will start".
+
+That judgement is subjective, so it is worth noting it has a measurable
+counterpart. Spectral flatness tells you how noise-like a signal is, with
+voiced speech sitting near zero:
+
+| | mean spectral flatness | mean RMS |
+|---|---|---|
+| Telugu | 0.0084 | 0.141 |
+| English | 0.0226 | 0.099 |
+
+English is roughly 2.7 times less tonal and noticeably quieter. The ranking by
+ear and the ranking by measurement agree.
+
+One caveat on my own judgement. I do not speak Telugu, so what I can say is
+that the Telugu output sounds like well formed Telugu words, cleanly
+articulated and separable. I cannot confirm that every word is the correct
+word, or that the prosody sounds native. A Telugu speaker should check that
+before this claim is leaned on.
+
+### 4.2 What the numbers say
 
 | | phones | duration | ms/phone | mean F0 | wav RMS |
 |---|---|---|---|---|---|
@@ -672,18 +690,26 @@ which is a normal speaking rate, no file clips, and both languages predict F0
 inside their own corpus range: Telugu near its 187 Hz speaker mean, English
 near the average of its 115 speakers.
 
-### Pronunciation, sentence by sentence
+### 4.3 Pronunciation, sentence by sentence
+
+Each of these pairs what the front end produced with what I actually hear.
 
 **E1, "antidisestablishmentarianism".** The front end misses it in the lexicon
 and falls through to `g2p_en`, which produces
 `AE2 N T AY0 D IH0 S AH0 S T AE2 B L IH0 SH M AH0 N T EH1 R IY0 AH0 N IH0 Z AH0 M`.
-That is correct, and the 85-phone sequence holds together at 68.7 ms per
-phoneme, so the duration predictor does not fall apart on a sequence far longer
-than anything in training.
+The phones are correct.
+
+The audio is not. I can follow the opening, roughly "anta", and after that it
+stops being words. So the front end did its job and the acoustic model did
+not. At 85 phones this is the second longest English sentence, and the
+sentences I can follow are the shorter ones, which points at the duration
+predictor that section 3.4 showed never generalised.
 
 **E2a and E2b, the "conduct" pair.** Both come out as
 `K AA1 N D AH0 K T`, byte for byte identical, which is what section 1.6
-predicted. The reason is worth restating precisely: ARPAbet carries stress in
+predicted. By ear the word is intelligible in both and sounds the same in both,
+slightly less clear in E2a. So the prediction holds: there is no audible
+noun-verb stress contrast, because there is no contrast in the input. The reason is worth restating precisely: ARPAbet carries stress in
 the phone symbol, so the noun is `AA1 ... AH0` and the verb should be
 `AA0 ... AH1`. The distinction lives in the phoneme string, not in the
 acoustics the model predicts on top of it. Since the front end hands the model
@@ -691,21 +717,39 @@ the noun string for both, **no amount of training could fix E2b**. It is a
 front-end bug, not a model limitation.
 
 **E3, "The rhyth m".** The deliberate break is preserved as instructed, and the
-consequence is visible: "rhyth" becomes `R AY1 DH` and "m" becomes `EH1 M`, so
-the model is synthesising something like "rythe em" rather than "rhythm". That
-is the correct behaviour given the assignment says to preserve the text.
+consequence is audible exactly as the phones predict. "rhyth" becomes
+`R AY1 DH` and "m" becomes `EH1 M`, and what I hear is "ryth em", two words.
+This is the clearest English sentence of the five, which makes sense since at
+37 phones it is also the shortest.
 
 **E4, the date and time.** `10:45` becomes `T EH1 N F AO1 R T IY0 F AY1 V`,
 `12` becomes `T W EH1 L V` and `2026` becomes
-`T W EH1 N IY0 T W EH1 N IY0 S IH1 K S`. All three are right, and all three
-were wrong before the fix in section 1.6.
+`T W EH1 N IY0 T W EH1 N IY0 S IH1 K S`. All three are right as phones, and all
+three were wrong before the fix in section 1.6.
 
-**T1, the long technical compound.** 66 phones at 69.5 ms each. The
-Telugu G2P handles it without falling back to anything.
+The audio opens intelligibly, "the meeting will start", and then goes mushy.
+I cannot make out any of the numbers, not "ten forty five", not "twelve
+November", not "twenty twenty six". The file is in no way silent, peak
+amplitude 0.610 and RMS 0.088, in the same range as E1 and E3.
+
+That shape, a clean opening followed by degradation, is the same thing E1
+does.
+
+Worth separating two things here. The phones going in are correct, and were
+not before the fix in section 1.6, so the text normalisation is not what
+failed. What failed is downstream of it. Number words are also the part of
+this sentence least supported by the training data, since Svarah contains far
+more ordinary prose than spelled-out dates and times.
+
+**T1, the long technical compound.** 66 phones at 69.5 ms each, and the Telugu
+G2P handles it without falling back to anything. It stays intelligible as
+distinct words all the way through, which is the direct contrast with E1 and
+E4: T4 is 119 phones, longer than any English sentence, and it does not break
+down.
 
 **T2a and T2b, the పట్టు pair.** Unlike English, both are genuinely the same
 word phonetically, so identical phones are correct here rather than a failure.
-Section 5 shows the prosody does differ.
+Both are clearly articulated, and section 5 shows the prosody does differ.
 
 **T3, "పులి అడ విలో".** The deliberate gap is preserved. The phones come out as
 `p u l i a dd a v i l oo`, and concatenating the two broken halves gives
@@ -814,13 +858,58 @@ identity given at inference, is not.
 42x worse on validation than training, English 36x and 63x. Both reach their
 best validation score within about 2000 steps.
 
-**Telugu needed far more work and produced the better-behaved model.** Telugu
-had no G2P, no pronunciation dictionary and no acoustic model, so all three
-were built from scratch. English had all three, and still needed the dictionary
-extended for 4.53% of its tokens. Despite that, the Telugu model is the
-cleaner one, because the corpus is one speaker in consistent conditions and
-Svarah is an ASR benchmark recorded across 115 speakers and varying conditions.
-The dataset mattered more than the tooling.
+**Telugu needed far more work and produced the better model, by a wide
+margin.** Telugu had no G2P, no pronunciation dictionary and no acoustic model,
+so all three were built from scratch. English had all three and still needed
+its dictionary extended for 4.53% of tokens. The Telugu model is nonetheless
+the one that works: every Telugu sentence is intelligible as separable words,
+while E1 falls apart after its opening and E4's numbers cannot be recovered.
+The measurements agree with the ears, 0.0084 mean spectral flatness against
+0.0226.
+
+The dataset mattered more than the tooling. Telugu is one speaker in
+consistent recording conditions. Svarah is an ASR benchmark spread over 115
+speakers and varying conditions, which is the harder target by far, and the
+assignment fixes both datasets so there was no choice to make here.
+
+**The English failure is positional, not uniform.** This is the most useful
+thing the listening turned up. Both long English sentences start cleanly and
+then fall apart part way through. E1, 85 phones, is followable for roughly its
+first syllables and then stops being words. E4, 78 phones, is clear through
+"the meeting will start" and then goes mushy. The three short ones, E3 at 37
+phones and the E2 pair at 50 and 56, hold up. Telugu shows nothing like this:
+T4 is 119 phones, longer than any English sentence, and it stays intelligible
+to the end.
+
+A failure that begins mid-utterance rather than affecting it evenly is what
+accumulated error looks like, and it points straight at the duration result in
+section 3.4. English validation duration loss sits at 0.2297 and never improves
+across the whole run, while Telugu reaches 0.075. Duration error compounds
+along a sequence, so the further into a sentence the decoder goes the worse the
+alignment between what it is producing and what the text said.
+
+I tried to measure it. Taking the mean frame-to-frame change in MFCCs as a
+proxy for how much phonetic contrast the audio carries, split into fifths of
+each utterance:
+
+| | first fifth | last fifth | last/first |
+|---|---|---|---|
+| E1 | 9.22 | 5.38 | 0.58 |
+| E4 | 8.26 | 6.06 | 0.73 |
+| E3 | 7.92 | 6.76 | 0.85 |
+| T4 | 10.76 | 9.79 | 0.91 |
+
+The ordering is right, with E1 decaying most and E3 and T4 holding steadiest,
+but this does not prove the mechanism on its own: T3 and T2b have ratios of
+0.66 and 0.65 and sound fine. What the same table does show clearly is the
+absolute difference between the languages. Telugu sits between 7.8 and 15.4
+throughout, English between 4.3 and 9.7, so the Telugu audio carries
+consistently more phonetic contrast, which is the measurable version of
+sounding like crisper words.
+
+Settling the length question properly would mean synthesising sentences of
+controlled length and measuring where intelligibility drops off, which I did
+not do.
 
 **Phonetically identical words behave differently in the two languages.** T2's
 పట్టు really is the same word phonetically in both sentences, so identical
@@ -841,7 +930,9 @@ phonetically, and producing identical phones is a failure.
 - **The vocoder invents the 8 to 11 kHz band.** Both corpora are band-limited
   below 8 kHz by `mel_fmax`, and the universal HiFi-GAN reconstructs above
   that from a mel that never contained it.
-- **Perceptual quality is unassessed.** See the note at the top of section 4.
+- **English is much weaker than Telugu.** E1 degrades after its opening
+  syllables and E4's number words are not recoverable, while every Telugu
+  sentence stays intelligible as separable words. Section 4.1 has the detail.
 
 ### What I would do differently
 
@@ -932,10 +1023,13 @@ are relative to the config file.
 
 ### 7.4 Checkpoints
 
-Checkpoints are too large for plain git, so they are provided as described in
-`README.md`. Each save produces a full checkpoint with optimiser state, about
-420 MB, and a weights-only copy, about 140 MB. The weights-only copy is what
-inference needs.
+Each save produces a full checkpoint with optimiser state, about 420 MB, and a
+weights-only copy, about 140 MB. The weights-only copy is what inference needs.
+
+Both are too large for plain git, so they are in a public Google Drive folder
+linked from `README.md`, which also gives the rename step and a command-line
+download that works around Drive's virus-scan page for files over 100 MB.
+Telugu is step 60000 and English is step 73100.
 
 ### 7.5 Notes on running this again
 
