@@ -155,17 +155,38 @@ Each save writes a full checkpoint with optimiser state (420 MB) and a
 weights-only copy (140 MB). Inference needs only the weights-only one. Both are
 too big for git, so they are linked below.
 
-| model | step | reached | link |
-|---|---|---|---|
-| Telugu | 60000 | stopped at 63675 of 80000 | *(to add)* |
-| English | 73100 | stopped at 73100 of 80000 | *(to add)* |
+[Both are in one Google Drive folder.](https://drive.google.com/drive/folders/1NdqrYxD7Aa2KroXQ8ad7mIBCqE0oMkWw)
+
+| model | step | reached | file | link |
+|---|---|---|---|---|
+| Telugu | 60000 | stopped at 63675 of 80000 | `telugu_60000.pth.tar` | [download](https://drive.google.com/file/d/1Qg88v7XsNzVJduXm4rOUvhTccaSdRVRA/view?usp=sharing) |
+| English | 73100 | stopped at 73100 of 80000 | `english_73100.pth.tar` | [download](https://drive.google.com/file/d/1qfxqT4mpIB9dzPzJsSCK4zOY7prU7fik/view?usp=sharing) |
 
 Neither run finished 80000 steps. Section 3.3 of the report shows this changed
 nothing: both models converged inside about 10000 steps and the rest was
 overfitting.
 
-Put the file in `English/checkpoints/` or `Telugu/checkpoints/` and pass the
-matching `--restore_step`.
+To use one, rename it to `<step>.pth.tar`, drop it in the matching
+`checkpoints/` folder and pass that step:
+
+```bash
+mv telugu_60000.pth.tar Telugu/checkpoints/60000.pth.tar
+cd Telugu && python inference.py --restore_step 60000
+
+mv english_73100.pth.tar English/checkpoints/73100.pth.tar
+cd English && python inference.py --restore_step 73100
+```
+
+Both files are over 100 MB, so Drive shows a virus-scan warning instead of
+downloading directly. In a browser just click through it. On the command line
+that page is what `wget` saves, so use:
+
+```bash
+curl -L -o telugu_60000.pth.tar \
+  "https://drive.usercontent.google.com/download?id=1Qg88v7XsNzVJduXm4rOUvhTccaSdRVRA&export=download&confirm=t"
+curl -L -o english_73100.pth.tar \
+  "https://drive.usercontent.google.com/download?id=1qfxqT4mpIB9dzPzJsSCK4zOY7prU7fik&export=download&confirm=t"
+```
 
 The vocoder is the universal HiFi-GAN checkpoint from the reference repo,
 unzipped into `fastspeech2/hifigan/`.
